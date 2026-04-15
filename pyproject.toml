@@ -1,0 +1,14 @@
+[project]
+name = "canvas-toolbox"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "anthropic>=0.93.0",
+    "beautifulsoup4>=4.14.3",
+    "canvasapi>=3.5.0",
+    "lxml>=6.0.3",
+    "python-dotenv>=1.2.2",
+    "requests>=2.33.1",
+]

@@ -1,0 +1,234 @@
+# Canvas Course Toolkit
+
+A Python toolkit for managing Canvas LMS courses as code. Mirror course content locally, sync across multiple courses (source → master → blueprint), audit structure, and manage quiz questions — all via the Canvas REST API.
+
+Built for BYU-Idaho instructors. Works with any Canvas institution.
+
+---
+
+## What it does
+
+| Tool | Purpose |
+|------|---------|
+| `canvas_sync.py` | Mirror a Canvas course into a local `course/` folder. Pull, edit, push. |
+| `blueprint_sync.py` | One-way sync from master → Blueprint course (for semester rollouts) |
+| `course_mirror.py` | One-off mirror between any two courses by title-matching |
+| `course_quality_check.py` | Audit any course for duplicates, floating published items, empty modules, and date issues |
+| `canvas_quiz_questions.py` | Manage classic Canvas quiz questions from a local JSON file |
+| `canvas_api_tool.py` | Cognitive load + Hattie 3-phase course auditor |
+
+**Source of truth: your local `course/` folder.** Canvas is the delivery target.
+
+---
+
+## Setup
+
+**Requirements:** Python 3.10+, [uv](https://docs.astral.sh/uv/)
+
+```bash
+git clone <this-repo>
+cd <repo>
+uv sync
+cp .env.example .env
+```
+
+**`.env` variables:**
+```
+CANVAS_API_TOKEN=your_token
+CANVAS_BASE_URL=https://byui.instructure.com
+CANVAS_COURSE_ID=123456          # your working/source course
+MASTER_COURSE_ID=123457          # master template course (optional)
+BLUEPRINT_COURSE_ID=123458       # Canvas Blueprint course (optional)
+```
+
+**Find your course ID:** open your Canvas course — it's the number in the URL after `/courses/`.
+
+**Generate an API token:** Canvas → Account → Settings → Approved Integrations → New Access Token. Requires instructor or admin role.
+
+---
+
+## Three-Course Architecture (optional)
+
+For courses that use Canvas Blueprints for semester rollout:
+
+```
+Source (CANVAS_COURSE_ID)   ← you edit this; course/ mirrors it
+       ↓ course_mirror.py
+Master (MASTER_COURSE_ID)   ← clean template
+       ↓ blueprint_sync.py
+Blueprint (BLUEPRINT_COURSE_ID) ← Canvas clones new sections from this
+```
+
+If you only have one course, just use `canvas_sync.py` and ignore the rest.
+
+---
+
+## canvas_sync.py — course mirror
+
+```bash
+uv run python tools/canvas_sync.py --pull            # pull full course into course/
+uv run python tools/canvas_sync.py --pull --quiet    # same, suppress per-file output
+uv run python tools/canvas_sync.py --status          # show local changes not yet pushed
+uv run python tools/canvas_sync.py --push            # push all local changes to Canvas
+uv run python tools/canvas_sync.py --push "sprint-1" # push one module only
+uv run python tools/canvas_sync.py --push syllabus   # push syllabus only
+```
+
+**Sync order:** always `--status` before `--push`. Don't push without knowing what changed.
+
+### What gets pulled
+
+| Type | Format | Editable |
+|------|--------|----------|
+| Pages | `.html` — body only | Yes |
+| Assignments | `.json` — description, points, due date | Yes |
+| Discussions | `.json` — title, body | Yes |
+| Quizzes | `.json` — description, metadata | Yes |
+| ExternalTool / SubHeader / ExternalUrl | `.json` — metadata only | No — manage in Canvas UI |
+
+**Not pulled:** gradebook, submissions, student data.
+
+---
+
+## blueprint_sync.py — master → blueprint
+
+```bash
+uv run python tools/blueprint_sync.py --pull     # mirror blueprint into blueprint_course/ + build mapping
+uv run python tools/blueprint_sync.py --status   # show mapping + date coverage
+uv run python tools/blueprint_sync.py --push     # sync master content + dates → blueprint
+```
+
+Syncs: settings, homepage, syllabus, all mapped pages/assignments/quizzes/discussions (with dates), module published state, item completion requirements, sprint prerequisite chain.
+
+**Does not sync:** NewQuiz/ExternalTool content (Canvas REST API limitation — manage these in Canvas UI).
+
+---
+
+## course_quality_check.py — course auditor
+
+Checks any course for issues that cause student problems:
+
+```bash
+uv run python tools/course_quality_check.py              # check source course
+uv run python tools/course_quality_check.py --master     # check master
+uv run python tools/course_quality_check.py --blueprint  # check blueprint
+uv run python tools/course_quality_check.py --all        # all three → quality_report.md
+uv run python tools/course_quality_check.py --all --fix  # auto-fix duplicates
+```
+
+**What it checks:**
+- Duplicate assignment groups, assignments, quizzes, module items
+- Published items not linked in any module (students cannot find these)
+- Empty modules (sync artifact when all items are NewQuiz/ExternalTool)
+- Due/lock/unlock dates outside the course date window
+
+**Report:** `quality_report.md` at repo root (gitignored — regenerate on demand).
+
+---
+
+## canvas_quiz_questions.py — quiz questions
+
+Manages questions for classic Canvas quizzes (not NewQuiz) from a local JSON file:
+
+```bash
+uv run python tools/canvas_quiz_questions.py --push course/.../quiz.questions.json  # idempotent
+uv run python tools/canvas_quiz_questions.py --list course/.../quiz.questions.json  # read-only
+uv run python tools/canvas_quiz_questions.py --clear course/.../quiz.questions.json # delete all
+```
+
+**Question file format** (`*.questions.json`):
+```json
+{
+  "canvas_quiz_id": 5911959,
+  "course_id": "415322",
+  "questions": [
+    {
+      "question_name": "Short label",
+      "question_text": "Full question shown to student.",
+      "question_type": "multiple_choice_question",
+      "points_possible": 1,
+      "answers": [
+        {"answer_text": "Correct answer", "answer_weight": 100},
+        {"answer_text": "Wrong answer",   "answer_weight": 0}
+      ]
+    }
+  ]
+}
+```
+
+Supported types: `multiple_choice_question`, `true_false_question`, `short_answer_question`, `multiple_answers_question`, `essay_question`.
+
+Note: `canvas_quiz_id` and `course_id` are course-specific — the same quiz has different IDs in each course. Push to each course separately.
+
+---
+
+## canvas_api_tool.py — structural auditor
+
+```bash
+uv run python tools/canvas_api_tool.py --test    # smoke tests, no credentials needed
+```
+
+Scores your course 0–100 across three frameworks:
+
+**Cognitive Load** (extraneous / intrinsic / germane) — flags unclear navigation, inconsistent naming, buried content.
+
+**Hattie's 3-Phase Model** — Surface (foundational knowledge), Deep (connecting ideas), Transfer (applying to new contexts). Gaps at Surface block everything downstream.
+
+**Toyota Gap Analysis** — Current State → Target State → Gap → Root Cause → Countermeasure → Verification.
+
+---
+
+## Canvas API Gotchas
+
+- **Module prerequisites** — use form-encoded `data={"module[prerequisite_module_ids][]": id}`, not JSON. JSON returns 200 but silently does nothing.
+- **Completion requirements** — must be set on every item in a module for the prerequisite lock to enforce. `must_submit` for assignments/quizzes, `must_view` for pages/tools/URLs.
+- **Classic quiz points** — Canvas may show 0 after questions are pushed. Fix with `PUT /quizzes/:id {"quiz": {"points_possible": N}}`.
+- **late_policy PATCH** — returns 403 for instructor tokens. Set manually in Canvas Settings → Gradebook, or use admin token.
+- **IDs are course-specific** — the same assignment has a different ID in every course and every cloned section. Always match content across courses by title, never by ID.
+- **Content + module = two steps** — creating an assignment/quiz/page makes it exist in the course but students cannot access it until it is also added as a module item.
+
+---
+
+## BYUI Course Design Conventions
+
+Each student-facing module follows this order:
+
+1. **Overview page** — learning outcomes, estimated time, how items connect
+2. **Content** — readings, videos, demos
+3. **Teach One Another** — discussion where students explain or apply to peers
+4. **Prove It** — assignment, quiz, or milestone demonstrating mastery
+
+Module naming: `Sprint X: Topic (WXX–WXX)` or `Week X: Topic`.
+
+---
+
+## Troubleshooting
+
+**`--pull` returns empty modules** — verify `CANVAS_COURSE_ID` is correct and the token has instructor access. Test: `GET /api/v1/courses/:id` — response should show `"type": "teacher"` in enrollments.
+
+**Push returns 403** — token is read-only or student-level. Generate a new token from an instructor or admin account.
+
+**`--status` shows everything changed after `--pull`** — index hashes may not have been written. Re-run `--pull` (safe to re-run).
+
+**Page looks wrong in Canvas after push** — Canvas adds its own CSS wrapper. The `.html` files store body only. Check in Student View, not the editor.
+
+**Quality check shows "published not in module"** — the item exists in the course but was never linked to a module. Add it via Canvas UI or `POST /modules/:id/items`.
+
+---
+
+## Files
+
+| File | Purpose |
+|------|---------|
+| `tools/canvas_sync.py` | Source course mirror |
+| `tools/blueprint_sync.py` | Master → Blueprint sync |
+| `tools/course_mirror.py` | Source → Master mirror |
+| `tools/course_quality_check.py` | Course health auditor |
+| `tools/canvas_quiz_questions.py` | Classic quiz question manager |
+| `tools/canvas_api_tool.py` | Cognitive load auditor + Canvas write functions |
+| `agents/canvas_blueprint_sync.md/.json` | Blueprint sync agent guide + API schema |
+| `agents/canvas_course_expert.md/.json` | Audit agent guide + rules |
+| `agents/canvas_content_sync.md/.json` | Content sync agent guide |
+| `agents/knowledge/` | Hattie 3-phase + Toyota gap analysis references |
+| `course/` | Live course mirror — source of truth |
+| `CLAUDE.md.example` | Template for Claude Code project context (CLAUDE.md is gitignored) |
