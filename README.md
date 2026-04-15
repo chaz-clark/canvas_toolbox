@@ -6,6 +6,50 @@ Built for BYU-Idaho instructors. Works with any Canvas institution.
 
 ---
 
+## Quick Start
+
+**1. Install**
+```bash
+git clone <this-repo>
+cd <repo>
+uv sync
+cp .env.example .env
+```
+
+**2. Add your credentials to `.env`**
+```
+CANVAS_API_TOKEN=your_token_here
+CANVAS_BASE_URL=https://your-institution.instructure.com
+CANVAS_COURSE_ID=123456
+```
+
+- **Course ID:** open your Canvas course — it's the number in the URL after `/courses/`
+- **API token:** Canvas → Account → Settings → Approved Integrations → New Access Token (requires instructor or admin role)
+
+**3. Pull your course**
+```bash
+uv run python tools/canvas_sync.py --init
+```
+
+This mirrors your entire Canvas course into a local `course/` folder — all modules, pages, assignments, quizzes, discussions, and the syllabus.
+
+**4. Check what you have**
+```bash
+ls course/                           # one folder per module
+uv run python tools/course_quality_check.py   # audit for issues
+```
+
+**5. Edit locally, push to Canvas**
+```bash
+# Edit any file in course/ with a text editor
+uv run python tools/canvas_sync.py --status  # see what changed
+uv run python tools/canvas_sync.py --push    # push changes to Canvas
+```
+
+That's the core loop. Everything else builds on it.
+
+---
+
 ## What it does
 
 | Tool | Purpose |
