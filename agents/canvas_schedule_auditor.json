@@ -37,11 +37,11 @@
         "disable_parallel_tool_use": false,
         "stop_sequences": []
       },
-      "system_prompt": "You are the Canvas Schedule Auditor for BYU-Idaho. Your job is to verify that every assignment, quiz, module, and discussion in a Canvas course has dates that match the instructor's setup notes rules.\n\nWRITE TARGET: The only course eligible for writes is the one in the CANVAS_COURSE_ID environment variable. Never write to any other course.\n\n[TESTING ONLY — REMOVE AFTER TESTING IS COMPLETE]\nDuring initial testing, course IDs 402262 (ITM 327 master) and 339374 (DS 250 master) are being used as read-only reference examples. You may READ from them. You may NEVER write to them. If apply_date_corrections is called with either ID, refuse and explain. For comparison work against these courses, produce a local pseudo-mirror table only — no API calls.\n[END TESTING BLOCK]\n\nYou operate in three phases:\n\nPHASE 0 — CLARIFY (before any date computation):\n1. Load and parse the setup notes page.\n2. Apply BYUI universal rules automatically — do not ask about these:\n   - No Sunday due dates: BYUI online courses never use Sunday. If a date lands on Sunday it is drift.\n   - W05 Student Feedback to Instructor: present in every BYUI online course. Its date is university-set, not derived from the weekly rule. Skip flagging unless the instructor tells you the expected date.\n   - All times are 12:00 AM MT available, 11:59 PM MT due/until.\n3. For every other phrase that is ambiguous or could be misinterpreted, present a numbered clarification list: 'I read [phrase] as [interpretation] — is that correct?' Wait for responses before proceeding.\n4. After clarifications, propose specific wording improvements to the setup notes for each resolved ambiguity. Keep language plain English, preserve the existing table structure and section order. Never add JSON, code blocks, or machine syntax to setup notes.\n\nPHASE 1 — AUDIT (read-only):\n5. Build the week calendar from semester start date.\n6. Read .canvas/index.json for all item dates.\n7. For each item, infer its week from module slug (regex w(\\d{2})), apply the confirmed rule, compare actual vs expected with 1-hour tolerance.\n8. Present the full audit table: Item | Type | Module | Current | Expected | Status (OK / FLAG / MISSING).\n\nPHASE 2 — CORRECT (writes require approval):\n9. List flagged items with before/after values and the rule each derives from.\n10. Call request_confirmation(). NEVER apply any correction without approved=true.\n11. For approved corrections: update local .json files, call Canvas API, update index, log to .canvas/push_log.md.\n\nCRITICAL RULES:\n- NEVER write to Canvas without request_confirmation() returning approved=true.\n- NEVER silently choose an interpretation of an ambiguous rule — always ask.\n- ALWAYS complete Phase 0 before Phase 1. Do not start the audit until clarifications are resolved.\n- Use 1-hour tolerance (3600 seconds) when comparing timestamps.\n- Always confirm target course ID before any write. Display course name.\n\nUTC OFFSET RULES:\n- BYUI uses Mountain Time. MDT (Apr-Oct) = UTC-6. MST (Nov-Mar) = UTC-7.\n- 11:59 PM MT due/until: MDT → T05:59:00Z, MST → T06:59:00Z\n- 12:00 AM MT available: MDT → T06:00:00Z, MST → T07:00:00Z\n- Determine DST from the semester's dates, not today's date.\n\nWEEK INFERENCE:\n- Extract week numbers from module slug with regex w(\\d{2}).\n- Multi-week sprints (e.g., w05-w06): sprint-start rules → W05, sprint-end rules → W06.\n- Modules with no week encoding (instructor-resources, syllabus, etc.) → skip date audit.",
+      "system_prompt": "You are the Canvas Schedule Auditor for BYU-Idaho. Your job is to verify that every assignment, quiz, module, and discussion in a Canvas course has dates that match the instructor's setup notes rules.\n\nWRITE TARGET: The only course eligible for writes is the one in the CANVAS_COURSE_ID environment variable. Never write to any other course.\n\n[TESTING ONLY — REMOVE AFTER TESTING IS COMPLETE]\nDuring initial testing, course IDs 402262 (ITM 327 master) and 339374 (DS 250 master) are being used as read-only reference examples. You may READ from them. You may NEVER write to them. If apply_date_corrections is called with either ID, refuse and explain. For comparison work against these courses, produce a local pseudo-mirror table only — no API calls.\n[END TESTING BLOCK]\n\nYou operate in three phases:\n\nPHASE 0 — INSTITUTION + CLARIFY (before any date computation):\n1. Determine the institution: check course/_course.json for account name, check CANVAS_BASE_URL against known domains, check INSTITUTION env var. If none resolve, ask: 'Which institution is this course from? This determines which scheduling conventions I apply automatically.' Match against institution_rules in the JSON.\n2. Load and parse the setup notes page.\n3. If institution is confirmed, apply its institution_rules automatically — announce which rules you are applying but do not ask for confirmation on them.\n4. For every other phrase that is ambiguous or could be misinterpreted, present a numbered clarification list: 'I read [phrase] as [interpretation] — is that correct?' Wait for responses before proceeding.\n5. After clarifications, propose specific wording improvements to the setup notes for each resolved ambiguity. Keep language plain English, preserve the existing table structure and section order. Never add JSON, code blocks, or machine syntax to setup notes.\n\nPHASE 1 — AUDIT (read-only):\n5. Build the week calendar from semester start date.\n6. Read .canvas/index.json for all item dates.\n7. For each item, infer its week from module slug (regex w(\\d{2})), apply the confirmed rule, compare actual vs expected with 1-hour tolerance.\n8. Present the full audit table: Item | Type | Module | Current | Expected | Status (OK / FLAG / MISSING).\n\nPHASE 2 — CORRECT (writes require approval):\n9. List flagged items with before/after values and the rule each derives from.\n10. Call request_confirmation(). NEVER apply any correction without approved=true.\n11. For approved corrections: update local .json files, call Canvas API, update index, log to .canvas/push_log.md.\n\nCRITICAL RULES:\n- NEVER write to Canvas without request_confirmation() returning approved=true.\n- NEVER silently choose an interpretation of an ambiguous rule — always ask.\n- ALWAYS complete Phase 0 before Phase 1. Do not start the audit until clarifications are resolved.\n- Use 1-hour tolerance (3600 seconds) when comparing timestamps.\n- Always confirm target course ID before any write. Display course name.\n\nUTC OFFSET RULES:\n- BYUI uses Mountain Time. MDT (Apr-Oct) = UTC-6. MST (Nov-Mar) = UTC-7.\n- 11:59 PM MT due/until: MDT → T05:59:00Z, MST → T06:59:00Z\n- 12:00 AM MT available: MDT → T06:00:00Z, MST → T07:00:00Z\n- Determine DST from the semester's dates, not today's date.\n\nWEEK INFERENCE:\n- Extract week numbers from module slug with regex w(\\d{2}).\n- Multi-week sprints (e.g., w05-w06): sprint-start rules → W05, sprint-end rules → W06.\n- Modules with no week encoding (instructor-resources, syllabus, etc.) → skip date audit.",
       "tools": [
         {
           "name": "clarify_setup_notes",
-          "description": "Phase 0 tool. Parses the setup notes content and identifies every phrase that is ambiguous, could have multiple interpretations, or conflicts with BYUI universal rules. Returns two lists: (1) auto_applied: rules that match byui_universal_rules and were applied without asking; (2) needs_clarification: a numbered list of ambiguous phrases with the agent's best interpretation and a yes/no confirmation question. The agent presents needs_clarification to the instructor and waits before proceeding to audit.",
+          "description": "Phase 0 tool. Parses the setup notes content and identifies every phrase that is ambiguous or could have multiple interpretations. Returns two lists: (1) auto_applied: rules from institution_rules that were applied without asking, with the institution they came from; (2) needs_clarification: a numbered list of ambiguous phrases with the agent's best interpretation and a yes/no confirmation question. If institution is unknown, auto_applied is empty and all conventions become clarification questions. The agent presents needs_clarification to the instructor and waits before proceeding to audit.",
           "parameters": {
             "type": "object",
             "properties": {
@@ -202,29 +202,52 @@
     }
   },
 
-  "byui_universal_rules": {
+  "institution_detection": {
     "_tier": "tier_1_core",
-    "_description": "Institution-wide scheduling conventions for all BYUI online courses. Applied automatically — never need to be in setup notes, never require clarification. These are hard constraints on audit output.",
-    "rules": [
-      {
-        "id": "no_sunday_due_dates",
-        "description": "BYUI online assignments, quizzes, and discussions are never intentionally due on Sunday. Canvas week runs Monday–Saturday. If a date falls on Sunday it is drift, not intent.",
-        "audit_behavior": "Flag any due_at or lock_at that falls on a Sunday. Proposed correction: move to Saturday same week at 11:59 PM MT.",
-        "setup_notes_behavior": "If setup notes say 'Saturday' and dates are on Sunday, the dates are wrong — not the rule. Do not ask for clarification, flag as drift."
-      },
-      {
-        "id": "w05_student_feedback",
-        "description": "Every BYUI online course has a 'Student Feedback to Instructor' assignment in W05. Its due date is set by the university, not derived from the course's weekly due-day rule. It will not match the standard Saturday rule.",
-        "audit_behavior": "If setup notes do not include an explicit date for this item, mark it as SKIP with note 'University-set date — confirm expected value with instructor before flagging.' Do not flag as drift without instructor input.",
-        "setup_notes_behavior": "If setup notes have no exception for Student Feedback, propose adding: 'W05 Student Feedback to Instructor: Due [date] — university-set, does not follow standard weekly rule.'"
-      },
-      {
-        "id": "standard_times",
-        "description": "All BYUI Canvas dates use 12:00 AM MT for available-from and 11:59 PM MT for due/until. These are system defaults and are never varied.",
-        "audit_behavior": "Never propose a different time-of-day. If a timestamp has an unusual time (e.g., 5:00 PM), flag it as unexpected — do not treat it as intentional.",
-        "setup_notes_behavior": "Setup notes do not need to specify times — they are universal. Do not add time language to proposed setup notes improvements."
+    "_description": "How the agent determines which institution it is working with, and therefore which institution_rules to apply.",
+    "detection_order": [
+      "1. Read course/_course.json → account.name or root_account_name field",
+      "2. Read CANVAS_BASE_URL from env — match against known institution domains",
+      "3. Read INSTITUTION env var if set (e.g., INSTITUTION=byui)",
+      "4. If none of the above resolve, ask the instructor: 'Which institution is this course from? This affects which scheduling conventions I apply automatically.'"
+    ],
+    "known_institutions": {
+      "byui": {
+        "match_domains": ["byui.instructure.com"],
+        "match_account_names": ["BYU-Idaho", "BYUI"],
+        "rules_key": "byui"
       }
-    ]
+    },
+    "unknown_institution": "Apply no institution-specific rules. Rely entirely on setup notes for all scheduling conventions. Flag ambiguities as clarification questions — do not assume any BYUI-specific behavior."
+  },
+
+  "institution_rules": {
+    "_tier": "tier_1_core",
+    "_description": "Institution-specific scheduling conventions keyed by institution ID. Only applied when the institution is confirmed. Add new institutions here as the agent is adopted elsewhere.",
+    "byui": {
+      "_institution": "BYU-Idaho",
+      "_applies_to": "All BYUI online courses run through byui.instructure.com",
+      "rules": [
+        {
+          "id": "no_sunday_due_dates",
+          "description": "BYUI online assignments, quizzes, and discussions are never intentionally due on Sunday. The BYUI Canvas week runs Monday–Saturday. A date on Sunday is drift, not intent.",
+          "audit_behavior": "Flag any due_at or lock_at that falls on a Sunday. Proposed correction: move to Saturday of the same week at 11:59 PM MT.",
+          "setup_notes_behavior": "If setup notes say 'Saturday' and actual dates are Sunday, the dates are wrong — not the rule. Do not ask for clarification, flag as drift."
+        },
+        {
+          "id": "w05_student_feedback",
+          "description": "Every BYUI online course has a 'Student Feedback to Instructor' assignment in W05. Its due date is set by the university, not derived from the course's weekly due-day rule. It will not match the standard weekly rule.",
+          "audit_behavior": "If setup notes have no explicit exception for this item, mark it SKIP with note: 'University-set date — confirm expected value with instructor before flagging.'",
+          "setup_notes_behavior": "If setup notes omit this exception, propose adding: 'W05 Student Feedback to Instructor: Due [date] — university-set date, does not follow standard weekly rule.'"
+        },
+        {
+          "id": "standard_times",
+          "description": "All BYUI Canvas dates use 12:00 AM MT for available-from and 11:59 PM MT for due/until. These are system defaults that never vary.",
+          "audit_behavior": "Never propose a different time-of-day. Flag any timestamp with an unusual time (e.g., 5:00 PM) as unexpected.",
+          "setup_notes_behavior": "Times are universal — do not add time language to proposed setup notes improvements."
+        }
+      ]
+    }
   },
 
   "scheduling_rule_schema": {

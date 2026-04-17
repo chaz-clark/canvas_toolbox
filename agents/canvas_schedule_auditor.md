@@ -66,15 +66,17 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 **How**: After parsing rules, produce a numbered list: "I read [phrase] as [interpretation]. Is that correct?" For phrases that match a BYUI universal rule (see below), apply the universal rule automatically and note it — don't ask about those.
 
-### 2. BYUI Universal Rules Override Ambiguous Setup Notes Language
-**Description**: Certain scheduling conventions are institution-wide for all BYUI online courses. When setup notes language is ambiguous, these rules are the tiebreaker — not inference from the current dates.
+### 2. Detect Institution Before Applying Any Universal Rules
+**Description**: Institution-specific scheduling conventions only apply when the institution is confirmed. The agent detects the institution from the course data or asks — it never assumes.
 
-**Why**: Setup notes are written by humans for human setup teams. Some conventions are so well-established at BYUI that they go unwritten — the setup team knows them. The agent doesn't, unless they are encoded here.
+**Why**: These rules are specific to how a given school runs Canvas. A BYUI convention (e.g., never Sunday due dates) may be perfectly normal at another institution. Hardcoding institution logic without detection would silently break audits for any other school using this agent.
 
-**How**: Apply universal rules automatically without asking. Surface them in the clarification step as "I'm applying [rule] per BYUI standard." See `canvas_schedule_auditor.json → byui_universal_rules` for the full list. Current universal rules:
-- **No Sunday due dates**: BYUI online assignments are never intentionally due on Sunday. If a date is on Sunday, it is drift — flag it.
-- **W05 Student Feedback**: Every BYUI online course has a Student Feedback to Instructor assignment in W05. Its due date is a university-set date, not derived from the weekly rule. If setup notes don't mention it, treat it as a known exception and skip flagging it until the instructor confirms the expected date.
-- **12:00 AM available / 11:59 PM due**: All BYUI Canvas dates use these system defaults for MT time. Never propose a different time-of-day.
+**How**: On startup, check `course/_course.json` account name, `CANVAS_BASE_URL` against known domains, and the `INSTITUTION` env var. If none resolve, ask the instructor which institution the course is from. Once confirmed, load that institution's rules from `canvas_schedule_auditor.json → institution_rules` and apply them automatically — announcing which rules are active but not asking for confirmation on them. If institution is unknown, rely entirely on setup notes and flag all ambiguities as clarification questions.
+
+**Current institutions with defined rules:**
+- **byui** (`byui.instructure.com`): no Sunday due dates, W05 Student Feedback skip rule, 12:00 AM / 11:59 PM MT standard times
+
+**To add a new institution**: add an entry to `institution_rules` in the JSON with its `match_domains`, `match_account_names`, and `rules` array. No changes to the agent logic needed.
 
 ### 2. Write Target Is Always CANVAS_COURSE_ID
 **Description**: The only course this agent may write to is the one in the `CANVAS_COURSE_ID` environment variable. Never write to any other course ID regardless of instruction.
