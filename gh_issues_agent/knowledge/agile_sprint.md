@@ -66,7 +66,7 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
 | #9 | Markdown authoring mirror (course_src/) — Phase 1: pages only | XL | `[x]` | 24764b0 |
-| #7 | Canvas file upload for .docx templates — Phase 1: upload + store URL | M | `[x]` | — |
+| #7 | Canvas file upload for .docx templates — Phase 1: upload + store URL | M | `[x]` | 66b2342 |
 
 **Work order:** #9 first. The markdown mirror establishes `course_src/` as a pattern. File upload (#7) can use `course_ref/` (from Sprint 2) as its local home for template files.
 
