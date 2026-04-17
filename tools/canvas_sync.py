@@ -98,6 +98,7 @@ def _log_push(summary: str, comment: str, files_pushed: list[str], direction: st
         f.write("\n")
 
 COURSE_DIR = Path("course")
+COURSE_SRC_DIR = Path("course_src")
 INDEX_PATH = Path(".canvas/index.json")
 
 # Item types with no editable body — store as metadata-only JSON
@@ -211,6 +212,50 @@ def _pull_new_quiz_sidecar(course_id: str, quiz_id: int) -> Optional[dict]:
         "settings": settings,
         "items": items if isinstance(items, list) else [],
     }
+
+
+# ---------------------------------------------------------------------------
+# ---------------------------------------------------------------------------
+# Markdown conversion helpers
+# ---------------------------------------------------------------------------
+
+def _html_to_md(html: str, title: str = "", canvas_id: int = 0, page_url: str = "") -> str:
+    """Convert Canvas page HTML to markdown with YAML frontmatter."""
+    import markdownify
+    from bs4 import BeautifulSoup
+
+    soup = BeautifulSoup(html, "lxml")
+    for tag in soup.find_all("script"):
+        tag.decompose()
+    # Unwrap outermost byui div if present — it's canvas/CSS scaffolding, not content
+    outer = soup.find("div", class_=lambda c: c and "byui" in c.split())
+    inner_html = str(outer) if outer else str(soup.body or soup)
+
+    md_body = markdownify.markdownify(inner_html, heading_style="ATX", strip=["div"]).strip()
+
+    frontmatter = "---\n"
+    if title:
+        frontmatter += f"title: {title}\n"
+    if canvas_id:
+        frontmatter += f"canvas_id: {canvas_id}\n"
+    if page_url:
+        frontmatter += f"page_url: {page_url}\n"
+    frontmatter += "---\n\n"
+    return frontmatter + md_body
+
+
+def _md_to_html(md_text: str) -> str:
+    """Convert markdown (with optional YAML frontmatter) to Canvas-ready HTML."""
+    import markdown as md_lib
+
+    # Strip YAML frontmatter block if present
+    body = md_text
+    if md_text.startswith("---"):
+        end = md_text.find("---", 3)
+        if end != -1:
+            body = md_text[end + 3:].lstrip("\n")
+
+    return md_lib.markdown(body, extensions=["tables", "fenced_code"])
 
 
 # ---------------------------------------------------------------------------
@@ -445,6 +490,16 @@ def cmd_init():
                     item_record["filename"] = filename
                     item_record["page_url"] = page_url
                     h = _file_hash(filepath)
+
+                    # Write markdown mirror to course_src/
+                    src_mod_dir = COURSE_SRC_DIR / mod_slug
+                    src_mod_dir.mkdir(parents=True, exist_ok=True)
+                    md_path = src_mod_dir / f"{item_slug}.md"
+                    md_path.write_text(
+                        _html_to_md(body, title=item_title, canvas_id=content_id, page_url=page_url),
+                        encoding="utf-8",
+                    )
+
                     index["files"][str(filepath)] = {
                         "canvas_id": content_id,
                         "type": "Page",
@@ -455,6 +510,7 @@ def cmd_init():
                         "module_canvas_id": mod.get("id"),
                         "hash": h,
                         "published": published,
+                        "markdown_path": str(md_path),
                     }
                     _vprint(f"      [page] {filename}")
 
@@ -1095,6 +1151,47 @@ def cmd_push(target: Optional[str] = None):
 
 
 # ---------------------------------------------------------------------------
+# Build: course_src/*.md → course/*.html
+# ---------------------------------------------------------------------------
+
+def cmd_build():
+    """Convert course_src markdown files to Canvas-ready HTML in course/.
+
+    Reads all pages tracked in the index that have a markdown_path, converts
+    the .md file to HTML, and writes it to the corresponding course/ path.
+    Run this after editing markdown, then use --push to sync to Canvas.
+    """
+    index = _load_index()
+    built = 0
+    skipped = 0
+
+    for filepath_str, meta in index.get("files", {}).items():
+        if meta.get("type") != "Page":
+            continue
+        md_path_str = meta.get("markdown_path")
+        if not md_path_str:
+            continue
+        md_path = Path(md_path_str)
+        if not md_path.exists():
+            _vprint(f"  SKIP: markdown source missing — {md_path_str}")
+            skipped += 1
+            continue
+        html_path = Path(filepath_str)
+        html_path.parent.mkdir(parents=True, exist_ok=True)
+        md_content = md_path.read_text(encoding="utf-8")
+        html_content = _md_to_html(md_content)
+        html_path.write_text(html_content, encoding="utf-8")
+        _vprint(f"  [built] {filepath_str}")
+        built += 1
+
+    print(f"Build complete. {built} page(s) built from markdown.")
+    if skipped:
+        print(f"  {skipped} page(s) skipped — markdown source missing (run --pull first)")
+    if built:
+        print(f"  Run --status to review changes, then --push to sync to Canvas.")
+
+
+# ---------------------------------------------------------------------------
 # Pull single resource (re-sync from Canvas → local)
 # ---------------------------------------------------------------------------
 
@@ -1171,14 +1268,23 @@ Commands:
   --pull <path>       Re-pull one file from Canvas and log the Canvas-side change
   --push              Push all local changes to Canvas (prompts for summary + comment)
   --push <module>     Push changed files in one module only
+  --build             Convert course_src/*.md → course/*.html (run before --push after editing markdown)
   --status            Show local changes not yet pushed
   --init              Alias for --pull (full course pull)
+
+Markdown authoring workflow:
+  1. --pull           Populates both course/ (HTML) and course_src/ (Markdown)
+  2. Edit .md files   Edit in course_src/ — human-friendly, agent-friendly
+  3. --build          Converts .md back to HTML in course/
+  4. --status         Review what changed
+  5. --push           Sync to Canvas
 
 Flags:
   --quiet             Suppress per-file lines; show only headers and totals
 
 Safe zones:
   course/             Canvas mirror — overwritten on every --pull. Do not place local-only files here.
+  course_src/         Markdown authoring mirror — edit here, then --build before --push.
   course_ref/         Local-only artifacts (answer keys, drafts, helpers) — never touched by --pull.
   course/*.questions.json   Classic quiz push sources — skipped by --pull cleanup.
 
@@ -1190,6 +1296,7 @@ Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
     parser.add_argument("--push", nargs="?", const="", metavar="MODULE", help="Push changed files to Canvas")
     parser.add_argument("--pull", nargs="?", const="", metavar="PATH",
                         help="Full course pull (no path) or re-pull one file from Canvas (with path)")
+    parser.add_argument("--build", action="store_true", help="Convert course_src/*.md to course/*.html")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-file output; show only headers and totals")
 
     args = parser.parse_args()
@@ -1205,5 +1312,7 @@ Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
         cmd_push(args.push if args.push else None)
     elif args.pull:
         cmd_pull(args.pull)
+    elif args.build:
+        cmd_build()
     else:
         parser.print_help()
