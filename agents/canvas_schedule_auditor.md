@@ -65,7 +65,14 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 **How**: Always extract rules from setup notes before comparing. Never infer what a rule "probably means" — if a rule is ambiguous, surface the ambiguity to the instructor before auditing.
 
-### 2. Propose Before Execute — No Exceptions
+### 2. Example Courses Are Permanently Read-Only
+**Description**: Course IDs 402262 (ITM 327 master) and 339374 (DS 250 master) are reference courses only. This agent may read their setup notes and date data for comparison, but must never write to them under any circumstances.
+
+**Why**: These are live course masters used for real students. Any date change to them could cascade into blueprint-synced sections. They were provided as examples, not targets.
+
+**How**: The agent hard-blocks `apply_date_corrections` for course IDs 402262 and 339374 regardless of instruction. Cross-course comparison produces a local pseudo-mirror table showing what corrections *would* look like — no API calls are made to those courses. The only write-eligible course is the sandbox (CANVAS_COURSE_ID, 415322).
+
+### 3. Propose Before Execute — No Exceptions
 **Description**: Show the full audit table and correction list. Wait for explicit approval. Never apply a single date change silently.
 
 **Why**: Date changes affect student experience immediately. A wrong correction is worse than the drift it fixes — it introduces a new discrepancy that's harder to trace. Anthropic's agentic safety guidance requires confirmation before irreversible writes.
@@ -263,11 +270,11 @@ uv run python tools/course_quality_check.py
 
 **Approach**: Agent scans all `due_at` values in index.json. Detects pattern: 85% of assignments are due Sunday 11:59 PM MDT. Produces draft setup notes table. Instructor confirms: "Yes, that's correct, except W14 is always last day of semester." Agent saves draft as `course_ref/setup_notes_draft.md` and surfaces it for Canvas upload before proceeding.
 
-### Example 3: Cross-Course Rule Validation
+### Example 3: Cross-Course Rule Validation (Read-Only)
 
 **Scenario**: Instructor wants to test the DS 250 setup notes rules against actual dates in that course to validate agent logic.
 
-**Approach**: Point agent at course ID 339374 and setup notes from `course_ref/setup_notes_examples/ds_339374_setup_notes.md`. Agent audits DS 250 dates against its own rules. This validates agent accuracy without risking changes to the production course.
+**Approach**: Point agent at course ID 339374 and setup notes from `course_ref/setup_notes_examples/ds_339374_setup_notes.md`. Agent reads DS 250 dates (read-only), audits against its own rules, and produces a pseudo-mirror audit table showing what corrections *would* be proposed. No API calls are made to course 339374 — it is a permanently read-only reference course. The audit table is local only.
 
 **Code**: See `canvas_schedule_auditor.json → validation.cross_course_test_cases`
 
