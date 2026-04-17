@@ -732,6 +732,8 @@ def cmd_init():
         for f in COURSE_DIR.rglob(ext):
             if f.name == "_module.json":
                 continue
+            if f.name.endswith(".questions.json"):
+                continue  # local-only quiz push source — never Canvas-backed
             rel = str(f)
             if rel not in tracked_paths:
                 f.unlink()
@@ -1123,6 +1125,11 @@ Commands:
 
 Flags:
   --quiet             Suppress per-file lines; show only headers and totals
+
+Safe zones:
+  course/             Canvas mirror — overwritten on every --pull. Do not place local-only files here.
+  course_ref/         Local-only artifacts (answer keys, drafts, helpers) — never touched by --pull.
+  course/*.questions.json   Classic quiz push sources — skipped by --pull cleanup.
 
 Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
         """
