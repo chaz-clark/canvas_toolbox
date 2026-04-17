@@ -988,16 +988,20 @@ def cmd_push(target: Optional[str] = None):
 
     # Commit-style log prompt
     print(f"\n{len(push_candidates)} file(s) ready to push.")
-    try:
-        summary = input("Push summary (required): ").strip()
-        if not summary:
-            print("Aborted — summary is required.")
-            return
-        comment = input("Additional comments (optional, Enter to skip): ").strip()
-    except (EOFError, KeyboardInterrupt):
-        # Non-interactive context (agent, CI) — proceed without prompt
-        summary = "Automated push"
+    if os.getenv("CANVAS_SYNC_NO_PROMPT"):
+        # CI / automated context — skip interactive prompt
+        summary = os.getenv("CANVAS_SYNC_NO_PROMPT", "Automated push")
         comment = ""
+    else:
+        try:
+            summary = input("Push summary (required): ").strip()
+            if not summary:
+                print("Aborted — summary is required.")
+                return
+            comment = input("Additional comments (optional, Enter to skip): ").strip()
+        except (EOFError, KeyboardInterrupt):
+            summary = "Automated push"
+            comment = ""
 
     print(f"\nPushing {len(push_candidates)} changed file(s)...\n")
 

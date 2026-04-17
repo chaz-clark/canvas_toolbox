@@ -1,0 +1,63 @@
+# Regression test suite — canvas_toolbox
+#
+# STATUS: DORMANT — triggers are commented out.
+#
+# To activate:
+#   1. Confirm BYUI policy allows Canvas API tokens in external CI systems
+#   2. Add three secrets to GitHub repo Settings → Secrets and variables → Actions:
+#        CANVAS_API_TOKEN   — instructor token for the sandbox course
+#        CANVAS_BASE_URL    — e.g. https://byui.instructure.com
+#        CANVAS_SANDBOX_ID  — course ID of the sandbox (safe to read/write)
+#   3. Uncomment the `on:` block below
+#
+# When active, this runs on every push to main and fails the build if any
+# regression test fails — catching silent regressions before they reach production.
+#
+# ─────────────────────────────────────────────────────────────────────────────
+
+name: Regression Tests
+
+# on:                        # ← uncomment to activate
+#   push:
+#     branches: [main]
+#   pull_request:
+#     branches: [main]
+
+on:
+  workflow_dispatch:          # manual trigger only while dormant
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install uv
+        run: pip install uv
+
+      - name: Install dependencies
+        run: uv sync
+
+      # ── Sandbox credentials ──────────────────────────────────────────────
+      # Uncomment after adding secrets (see instructions at top of file)
+      #
+      # - name: Write .env for tests
+      #   run: |
+      #     echo "CANVAS_API_TOKEN=${{ secrets.CANVAS_API_TOKEN }}" >> .env
+      #     echo "CANVAS_BASE_URL=${{ secrets.CANVAS_BASE_URL }}" >> .env
+      #     echo "CANVAS_SANDBOX_ID=${{ secrets.CANVAS_SANDBOX_ID }}" >> .env
+
+      - name: Run regression tests
+        run: uv run pytest tests/ -v
+        # Remove the env block below once the .env write step above is uncommented
+        env:
+          CANVAS_API_TOKEN: ""
+          CANVAS_BASE_URL: ""
+          CANVAS_SANDBOX_ID: ""
