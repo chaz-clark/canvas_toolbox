@@ -1151,6 +1151,128 @@ def cmd_push(target: Optional[str] = None):
 
 
 # ---------------------------------------------------------------------------
+# Upload: local file → Canvas Files
+# ---------------------------------------------------------------------------
+
+def _upload_file_to_canvas(local_path: Path, canvas_folder: str, course_id: str) -> dict:
+    """Upload a local file to Canvas Files using the two-step upload API.
+
+    Returns dict with canvas_file_id, filename, folder, url, local_source_path,
+    or raises RuntimeError on failure.
+    """
+    import mimetypes
+
+    filename = local_path.name
+    file_size = local_path.stat().st_size
+    content_type = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+
+    # Step 1: request an upload token
+    token_url = f"{CANVAS_BASE_URL}/api/v1/courses/{course_id}/files"
+    token_resp = requests.post(
+        token_url,
+        headers={"Authorization": f"Bearer {CANVAS_API_TOKEN}"},
+        json={
+            "name": filename,
+            "size": file_size,
+            "content_type": content_type,
+            "parent_folder_path": canvas_folder,
+            "on_duplicate": "overwrite",
+        },
+        timeout=20,
+    )
+    if token_resp.status_code >= 400:
+        raise RuntimeError(f"Upload token request failed ({token_resp.status_code}): {token_resp.text[:300]}")
+
+    token_data = token_resp.json()
+    upload_url = token_data["upload_url"]
+    upload_params = token_data.get("upload_params", {})
+
+    # Step 2: multipart POST to the pre-signed URL
+    with local_path.open("rb") as fh:
+        upload_resp = requests.post(
+            upload_url,
+            data=upload_params,
+            files={"file": (filename, fh, content_type)},
+            allow_redirects=True,
+            timeout=60,
+        )
+
+    if upload_resp.status_code not in (200, 201, 301, 302):
+        raise RuntimeError(f"Upload POST failed ({upload_resp.status_code}): {upload_resp.text[:300]}")
+
+    # Canvas may return the file object directly or after a redirect
+    file_obj = upload_resp.json() if upload_resp.text else {}
+
+    # If Canvas returned a redirect URL instead of a JSON body, follow it
+    if "id" not in file_obj and upload_resp.history:
+        confirm_resp = requests.get(
+            upload_resp.url,
+            headers={"Authorization": f"Bearer {CANVAS_API_TOKEN}"},
+            timeout=20,
+        )
+        file_obj = confirm_resp.json() if confirm_resp.text else {}
+
+    canvas_file_id = file_obj.get("id")
+    file_url = file_obj.get("url", "")
+
+    return {
+        "canvas_file_id": canvas_file_id,
+        "filename": filename,
+        "folder": canvas_folder,
+        "url": file_url,
+        "local_source_path": str(local_path),
+    }
+
+
+def cmd_upload(target: str, folder: str = "course_assets") -> None:
+    """Upload a local file (or all files in a folder) to Canvas Files.
+
+    Stores canvas_file_id, filename, folder, url, and local_source_path in
+    index["files_uploaded"] keyed by local path string.
+
+    Args:
+        target: path to a local file or directory to upload
+        folder: Canvas folder path to place files in (default: "course_assets")
+    """
+    index = _load_index()
+    if "files_uploaded" not in index:
+        index["files_uploaded"] = {}
+
+    target_path = Path(target)
+    if not target_path.exists():
+        print(f"ERROR: path not found — {target}")
+        sys.exit(1)
+
+    if target_path.is_dir():
+        candidates = [p for p in target_path.iterdir() if p.is_file() and not p.name.startswith(".")]
+    else:
+        candidates = [target_path]
+
+    if not candidates:
+        print("No files found to upload.")
+        return
+
+    uploaded = 0
+    failed = 0
+    for local_path in sorted(candidates):
+        try:
+            _vprint(f"  Uploading: {local_path} → Canvas Files/{folder}/")
+            meta = _upload_file_to_canvas(local_path, folder, CANVAS_COURSE_ID)
+            index["files_uploaded"][str(local_path)] = meta
+            _vprint(f"    ✓ canvas_file_id={meta['canvas_file_id']}  url={meta['url']}")
+            uploaded += 1
+        except RuntimeError as exc:
+            print(f"  ERROR uploading {local_path.name}: {exc}")
+            failed += 1
+
+    _save_index(index)
+    print(f"\nUpload complete. {uploaded} uploaded, {failed} failed.")
+    if uploaded:
+        print(f"  File metadata stored in {INDEX_PATH} under 'files_uploaded'.")
+        print(f"  Use the URL from the index to link files in assignment descriptions or pages.")
+
+
+# ---------------------------------------------------------------------------
 # Build: course_src/*.md → course/*.html
 # ---------------------------------------------------------------------------
 
@@ -1288,6 +1410,11 @@ Safe zones:
   course_ref/         Local-only artifacts (answer keys, drafts, helpers) — never touched by --pull.
   course/*.questions.json   Classic quiz push sources — skipped by --pull cleanup.
 
+File upload workflow:
+  1. Place template files in course_ref/ (local-only safe zone)
+  2. --upload course_ref/my-template.docx   Upload to Canvas Files/course_assets/
+  3. Index stores canvas_file_id + URL — reference in assignment descriptions
+
 Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
         """
     )
@@ -1297,6 +1424,9 @@ Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
     parser.add_argument("--pull", nargs="?", const="", metavar="PATH",
                         help="Full course pull (no path) or re-pull one file from Canvas (with path)")
     parser.add_argument("--build", action="store_true", help="Convert course_src/*.md to course/*.html")
+    parser.add_argument("--upload", metavar="PATH", help="Upload a local file or folder to Canvas Files")
+    parser.add_argument("--folder", default="course_assets", metavar="FOLDER",
+                        help="Canvas folder to upload into (default: course_assets)")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-file output; show only headers and totals")
 
     args = parser.parse_args()
@@ -1314,5 +1444,7 @@ Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
         cmd_pull(args.pull)
     elif args.build:
         cmd_build()
+    elif args.upload:
+        cmd_upload(args.upload, args.folder)
     else:
         parser.print_help()

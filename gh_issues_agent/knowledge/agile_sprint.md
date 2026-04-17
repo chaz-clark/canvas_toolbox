@@ -40,19 +40,19 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 **Goal:** Establish safe zones for local-only artifacts. Expand mirror visibility into New Quizzes.
 
 **Milestone:** Safe to Work In
-**Status:** Not started
+**Status:** Complete ✅
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
-| #4 | course_ref/ protected folder for local-only artifacts | M | `[ ]` | — |
-| #6 | New Quizzes pull support — Phase 1: read-only sidecar files | L | `[ ]` | — |
-
-**Work order:** #4 before #6 (and before #7, #9 in Sprint 3). The `course_ref/` pattern needs to exist before file upload and markdown mirror are built on top of it.
+| #4 | course_ref/ protected folder for local-only artifacts | M | `[x]` | 5f697d1 |
+| #10 | Automated regression test suite + GitHub Actions CI | M | `[x]` | ae3f9c1 |
+| #6 | New Quizzes pull support — Phase 1: read-only sidecar files | L | `[x]` | 34f6c13 |
 
 **Definition of done:**
-- `course_ref/` is documented and `--pull` does not delete files placed there
-- New Quizzes pull down as sidecar `.newquiz.json` files in `course/`
-- Index updated with `quiz_engine`, `new_quiz_id`, `settings_path` fields
+- `course_ref/` is documented and `--pull` does not delete files placed there ✅
+- Regression suite covers all Sprint 1 + Sprint 2 fixes; CI workflow dormant pending BYUI policy ✅
+- New Quizzes pull down as sidecar `.newquiz.json` files with settings + items ✅
+- Index updated with `quiz_engine` and `settings_path` fields ✅
 
 ---
 
@@ -61,19 +61,19 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 **Goal:** Lower the authoring barrier for teachers. Markdown is easier to edit and better for agents.
 
 **Milestone:** Author Like a Human
-**Status:** Not started
+**Status:** Complete ✅
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
-| #9 | Markdown authoring mirror (course_src/) — Phase 1: pages only | XL | `[ ]` | — |
-| #7 | Canvas file upload for .docx templates — Phase 1: upload + store URL | M | `[ ]` | — |
+| #9 | Markdown authoring mirror (course_src/) — Phase 1: pages only | XL | `[x]` | 24764b0 |
+| #7 | Canvas file upload for .docx templates — Phase 1: upload + store URL | M | `[x]` | — |
 
 **Work order:** #9 first. The markdown mirror establishes `course_src/` as a pattern. File upload (#7) can use `course_ref/` (from Sprint 2) as its local home for template files.
 
 **Definition of done:**
-- `--pull` optionally populates `course_src/` with `.md` versions of Canvas pages
-- Build step compiles `course_src/*.md` → `course/*.html` before push
-- File upload pushes local assets to Canvas Files and stores `canvas_file_id` + URL in index
+- `--pull` optionally populates `course_src/` with `.md` versions of Canvas pages ✅
+- Build step compiles `course_src/*.md` → `course/*.html` before push ✅
+- File upload pushes local assets to Canvas Files and stores `canvas_file_id` + URL in index ✅
 
 ---
 

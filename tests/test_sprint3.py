@@ -1,9 +1,11 @@
 """
 Sprint 3 regression tests — Author Like a Human
-Covers issues: #9
+Covers issues: #9, #7
 """
+import json
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -98,3 +100,43 @@ def test_build_produces_html(sandbox_pull, sandbox_env):
         md_path.write_text(original_md, encoding="utf-8")
         if original_html:
             html_path.write_text(original_html, encoding="utf-8")
+
+
+# ---------------------------------------------------------------------------
+# #7 — Canvas file upload stores metadata in index
+# ---------------------------------------------------------------------------
+
+def test_upload_stores_metadata_in_index(sandbox_env):
+    """#7: --upload must store canvas_file_id, url, folder, and local_source_path in index."""
+    import json
+    from pathlib import Path
+
+    # Create a small temp file to upload
+    tmp = Path("course_ref/_regression_upload_test.txt")
+    tmp.parent.mkdir(exist_ok=True)
+    tmp.write_text("regression upload test sentinel")
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "tools/canvas_sync.py", "--upload", str(tmp), "--folder", "course_assets_test"],
+            env=sandbox_env,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, f"--upload failed:\n{result.stderr}\n{result.stdout}"
+
+        index_path = Path(".canvas/index.json")
+        assert index_path.exists(), "index.json missing after --upload"
+        index = json.loads(index_path.read_text())
+
+        uploads = index.get("files_uploaded", {})
+        assert uploads, "REGRESSION #7: files_uploaded missing from index after --upload"
+
+        entry = uploads.get(str(tmp))
+        assert entry, f"REGRESSION #7: uploaded file not found in index under key '{tmp}'"
+        assert entry.get("canvas_file_id"), "REGRESSION #7: canvas_file_id missing from upload entry"
+        assert entry.get("url"), "REGRESSION #7: url missing from upload entry"
+        assert entry.get("folder") == "course_assets_test", "REGRESSION #7: folder not recorded correctly"
+        assert entry.get("local_source_path") == str(tmp), "REGRESSION #7: local_source_path not recorded"
+    finally:
+        tmp.unlink(missing_ok=True)
