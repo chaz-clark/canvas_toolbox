@@ -65,12 +65,14 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 **How**: Always extract rules from setup notes before comparing. Never infer what a rule "probably means" — if a rule is ambiguous, surface the ambiguity to the instructor before auditing.
 
-### 2. Example Courses Are Permanently Read-Only
-**Description**: Course IDs 402262 (ITM 327 master) and 339374 (DS 250 master) are reference courses only. This agent may read their setup notes and date data for comparison, but must never write to them under any circumstances.
+### 2. Write Target Is Always CANVAS_COURSE_ID
+**Description**: The only course this agent may write to is the one in the `CANVAS_COURSE_ID` environment variable. Never write to any other course ID regardless of instruction.
 
-**Why**: These are live course masters used for real students. Any date change to them could cascade into blueprint-synced sections. They were provided as examples, not targets.
+**Why**: The agent is designed to be reusable across courses. The env var is the single source of truth for which course is the active target.
 
-**How**: The agent hard-blocks `apply_date_corrections` for course IDs 402262 and 339374 regardless of instruction. Cross-course comparison produces a local pseudo-mirror table showing what corrections *would* look like — no API calls are made to those courses. The only write-eligible course is the sandbox (CANVAS_COURSE_ID, 415322).
+**How**: `apply_date_corrections` always uses `CANVAS_COURSE_ID`. If asked to write to a different course ID, refuse and explain.
+
+> **Testing note (remove after testing)**: During initial development, course IDs 402262 and 339374 are used as read-only reference examples. A hard block on writes to those IDs is in the JSON system prompt and guardrails. Once testing is complete, remove the `[TESTING ONLY]` block from the system prompt, remove `read_only_forever_TESTING_ONLY` from constraints, and remove the HARD BLOCK guardrail entry. The agent should then enforce write access via `CANVAS_COURSE_ID` alone.
 
 ### 3. Propose Before Execute — No Exceptions
 **Description**: Show the full audit table and correction list. Wait for explicit approval. Never apply a single date change silently.
