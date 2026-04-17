@@ -203,6 +203,7 @@ def _pull_assignment(course_id: str, assignment_id: int) -> Optional[dict]:
         "name": data.get("name"),
         "description": data.get("description", ""),
         "points_possible": data.get("points_possible"),
+        "grading_type": data.get("grading_type"),
         "due_at": data.get("due_at"),
         "lock_at": data.get("lock_at"),
         "unlock_at": data.get("unlock_at"),
@@ -295,7 +296,7 @@ def cmd_init():
         prior_hashes[index["homepage"]["filepath"]] = index["homepage"].get("hash")
     if index.get("syllabus"):
         prior_hashes[index["syllabus"]["filepath"]] = index["syllabus"].get("hash")
-    index["files"] = index.get("files", {})
+    index["files"] = {}  # rebuild from scratch — removes stale entries from renames/deletes
     index["modules"] = []  # rebuilt fresh each init
 
     # Course metadata + Syllabus
@@ -542,6 +543,18 @@ def cmd_init():
         }
         (mod_dir / "_module.json").write_text(json.dumps(module_json, indent=2), encoding="utf-8")
         index["modules"].append(mod_index_entry)
+
+    # Remove local files that no longer exist in Canvas (renames, deletes)
+    stale = set(prior_hashes) - set(index["files"]) - {
+        index.get("homepage", {}).get("filepath", ""),
+        index.get("syllabus", {}).get("filepath", ""),
+    }
+    stale.discard("")
+    for fp in stale:
+        p = Path(fp)
+        if p.exists():
+            p.unlink()
+            _vprint(f"  [removed] {fp} (no longer in Canvas)")
 
     # -----------------------------------------------------------------------
     # Assignment Groups (grading weight structure)
@@ -815,18 +828,30 @@ def _push_page(filepath: Path, meta: dict) -> bool:
     return True
 
 
+_VALID_GRADING_TYPES = {"pass_fail", "percent", "letter_grade", "gpa_scale", "points", "not_graded"}
+
+
 def _push_assignment(filepath: Path, meta: dict) -> bool:
     canvas_id = meta.get("canvas_id")
     if not canvas_id:
         print(f"    ERROR: no canvas_id in index for {filepath}")
         return False
     data = json.loads(filepath.read_text(encoding="utf-8"))
+    payload: dict = {
+        "description": data.get("description", ""),
+        "points_possible": data.get("points_possible"),
+        "published": data.get("published", True),
+    }
+    if "submission_types" in data:
+        payload["submission_types"] = data["submission_types"]
+    if "grading_type" in data:
+        gt = data["grading_type"]
+        if gt not in _VALID_GRADING_TYPES:
+            print(f"    ERROR: unsupported grading_type '{gt}'. Valid values: {sorted(_VALID_GRADING_TYPES)}")
+            return False
+        payload["grading_type"] = gt
     result = _put(f"/courses/{CANVAS_COURSE_ID}/assignments/{canvas_id}", {
-        "assignment": {
-            "description": data.get("description", ""),
-            "points_possible": data.get("points_possible"),
-            "published": data.get("published", True),
-        }
+        "assignment": payload
     })
     if result.get("error"):
         print(f"    ERROR: {result['error']}")
