@@ -10,7 +10,7 @@
 
 ## Mission
 
-**What it does**: Reads a course's setup notes page, extracts the scheduling rules the instructor defined (due days, unlock patterns, exceptions), then compares every assignment, quiz, module, and discussion against those rules. Produces a week-by-week audit table flagging date drift and proposes corrected `due_at`, `lock_at`, and `unlock_at` values with correct UTC offsets. Never writes without explicit approval.
+**What it does**: Reads a course's setup notes page, flags any phrasing that is ambiguous or could be misinterpreted, clarifies those rules with the instructor before auditing, then compares every assignment, quiz, module, and discussion against the confirmed rules. Produces a week-by-week audit table flagging date drift. Proposes both Canvas date corrections and setup notes language improvements — keeping notes readable for humans while making them unambiguous for agents. Never writes without explicit approval.
 
 **Why it exists**: Every semester, dates drift. A due date gets nudged manually in Canvas, a module unlocks a day late, a quiz closes before students can see feedback. Over 14 weeks and 40+ items, these errors compound invisibly. The setup notes page is the instructor's documented intent — this agent checks whether Canvas matches that intent and proposes the minimum corrections needed to restore it.
 
@@ -23,14 +23,15 @@
 ## Agent Quickstart
 
 1. **Confirm inputs**: Ask for semester name and Week 1 Monday (e.g., "Spring 2026, starting 2026-04-20"). If course has `start_at`/`end_at` in index, use those — confirm with instructor before proceeding.
-2. **Load setup notes**: Check `course_src/` for a markdown file whose path contains `setup-notes`. If missing, pull it from Canvas via `GET /api/v1/courses/:id/pages/setup-notes-and-course-settings`. If the course has no setup notes page, enter **infer mode** (see Pitfalls #2).
-3. **Parse rules**: Extract the scheduling rules table: for each item type (Modules, Assignments, Quizzes, Discussions), capture `available_from`, `due`, `until`, and any exceptions. See `canvas_schedule_auditor.json → scheduling_rule_schema` for the expected structure.
-4. **Build week calendar**: Map W01–W14 to date ranges using the Week 1 Monday start date. Determine MT offset: MDT (Apr–Oct) = UTC-6, MST (Nov–Mar) = UTC-7. Due/until at 11:59 PM MT → `T05:59:00Z` (MDT) or `T06:59:00Z` (MST). Available from at 12:00 AM MT → `T06:00:00Z` (MDT) or `T07:00:00Z` (MST).
-5. **Read course items**: Load `.canvas/index.json`. For each item in `files` with `due_at`, `lock_at`, or `unlock_at`, and for each module in `modules` with `unlock_at`, collect current values.
-6. **Audit**: For each item, infer its week number from its module slug (e.g., `sprint-3-sftp-dag-w05-w06` → W05–W06). Apply the matching rule to compute expected dates. Flag any item where actual ≠ expected beyond a 1-hour tolerance.
-7. **Produce audit table**: Format as a week-by-week table: Item | Type | Current | Expected | Status. See `canvas_schedule_auditor.json → output_format`.
-8. **Propose corrections**: List only the flagged items with before/after values. Call `request_confirmation()` with the full proposal. Do not proceed without `approved=true`.
-9. **Apply**: For approved corrections, call `PUT /api/v1/courses/:id/assignments/:id` (or quizzes, discussions, modules) with corrected timestamps. Update local `.json` files and `.canvas/index.json`.
+2. **Load setup notes**: Check `course_src/` for a markdown file whose path contains `setup-notes`. If missing, pull it from Canvas. If no setup notes exist, enter **infer mode** (see Pitfalls #2).
+3. **Clarify before auditing** *(new)*: Before computing any dates, parse the rules and flag every phrase that is ambiguous or potentially misinterpretable. Present them as a numbered list with your interpretation and ask the instructor to confirm or correct each one. Apply BYUI universal rules automatically (see `canvas_schedule_auditor.json → byui_universal_rules`) — do not ask about those. Only proceed to Step 4 after clarifications are resolved.
+4. **Update setup notes language** *(new)*: For each clarified ambiguity, propose a specific wording improvement to the setup notes. Keep the language human-readable and logically ordered — do not restructure the page into machine-only syntax. The goal is notes that are clear for both a human setup team and an agent reading them next semester.
+5. **Build week calendar**: Map W01–W14 to date ranges using the Week 1 Monday start date. MDT (Apr–Oct) = UTC-6, MST (Nov–Mar) = UTC-7. Due/until 11:59 PM MT → `T05:59:00Z` (MDT) or `T06:59:00Z` (MST). Available from 12:00 AM MT → `T06:00:00Z` (MDT) or `T07:00:00Z` (MST).
+6. **Read course items**: Load `.canvas/index.json` for all items with date fields.
+7. **Audit**: For each item, infer its week from the module slug. Apply the confirmed rule. Flag any item where actual ≠ expected beyond 1-hour tolerance. Apply BYUI universal rules as hard constraints (e.g., never flag a Saturday date as wrong by proposing Sunday).
+8. **Produce audit table**: Week-by-week table: Item | Type | Current | Expected | Status. See `canvas_schedule_auditor.json → output_format`.
+9. **Propose corrections**: Flagged items with before/after values. Call `request_confirmation()`. Do not proceed without `approved=true`.
+10. **Apply**: Corrections to Canvas + local files + index. Log to `.canvas/push_log.md`.
 
 For structured data — rule schema, API patterns, test cases — see `canvas_schedule_auditor.json`.
 
@@ -58,12 +59,22 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 ## Key Principles
 
-### 1. Setup Notes Are the Source of Truth
-**Description**: The setup notes page encodes the instructor's scheduling intent. This agent audits Canvas against that intent — it does not define the rules, it enforces them.
+### 1. Clarify Before You Audit
+**Description**: Read the setup notes, flag every phrase that is ambiguous or that the agent could misinterpret, and resolve all ambiguities with the instructor before computing a single expected date. Never silently pick an interpretation.
 
-**Why**: Rules embedded in setup notes are deliberate. The agent should not second-guess them, modify them, or substitute its own judgment for what "looks right." If the rules are wrong, the instructor updates the setup notes, then re-runs the audit.
+**Why**: A confident wrong interpretation produces a plausible-looking audit table with systematically wrong expected dates — harder to catch than a visible error. Asking one clarifying question upfront costs 30 seconds; misapplying a rule to 40 items wastes an audit run and erodes trust in the tool.
 
-**How**: Always extract rules from setup notes before comparing. Never infer what a rule "probably means" — if a rule is ambiguous, surface the ambiguity to the instructor before auditing.
+**How**: After parsing rules, produce a numbered list: "I read [phrase] as [interpretation]. Is that correct?" For phrases that match a BYUI universal rule (see below), apply the universal rule automatically and note it — don't ask about those.
+
+### 2. BYUI Universal Rules Override Ambiguous Setup Notes Language
+**Description**: Certain scheduling conventions are institution-wide for all BYUI online courses. When setup notes language is ambiguous, these rules are the tiebreaker — not inference from the current dates.
+
+**Why**: Setup notes are written by humans for human setup teams. Some conventions are so well-established at BYUI that they go unwritten — the setup team knows them. The agent doesn't, unless they are encoded here.
+
+**How**: Apply universal rules automatically without asking. Surface them in the clarification step as "I'm applying [rule] per BYUI standard." See `canvas_schedule_auditor.json → byui_universal_rules` for the full list. Current universal rules:
+- **No Sunday due dates**: BYUI online assignments are never intentionally due on Sunday. If a date is on Sunday, it is drift — flag it.
+- **W05 Student Feedback**: Every BYUI online course has a Student Feedback to Instructor assignment in W05. Its due date is a university-set date, not derived from the weekly rule. If setup notes don't mention it, treat it as a known exception and skip flagging it until the instructor confirms the expected date.
+- **12:00 AM available / 11:59 PM due**: All BYUI Canvas dates use these system defaults for MT time. Never propose a different time-of-day.
 
 ### 2. Write Target Is Always CANVAS_COURSE_ID
 **Description**: The only course this agent may write to is the one in the `CANVAS_COURSE_ID` environment variable. Never write to any other course ID regardless of instruction.
@@ -74,7 +85,14 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 > **Testing note (remove after testing)**: During initial development, course IDs 402262 and 339374 are used as read-only reference examples. A hard block on writes to those IDs is in the JSON system prompt and guardrails. Once testing is complete, remove the `[TESTING ONLY]` block from the system prompt, remove `read_only_forever_TESTING_ONLY` from constraints, and remove the HARD BLOCK guardrail entry. The agent should then enforce write access via `CANVAS_COURSE_ID` alone.
 
-### 3. Propose Before Execute — No Exceptions
+### 3. Setup Notes Must Serve Both Humans and Agents
+**Description**: When proposing setup notes improvements, preserve the existing structure, logical flow, and plain-English readability. Add precision without adding jargon. The goal is one document that a human setup team can follow next semester AND an agent can parse unambiguously.
+
+**Why**: Setup notes are currently run by human setup teams. Rewriting them into machine-only formats breaks that workflow. The right approach is making natural language more specific — not replacing it.
+
+**How**: Improve precision at the phrase level. Replace "Saturday" with "Saturday of that week" when context is ambiguous. Add an explicit exceptions subsection for items that don't follow the general rule. Keep the same table structure and section headings the BYUI setup team already knows. Never add code blocks, JSON, or structured syntax to setup notes.
+
+### 4. Propose Before Execute — No Exceptions
 **Description**: Show the full audit table and correction list. Wait for explicit approval. Never apply a single date change silently.
 
 **Why**: Date changes affect student experience immediately. A wrong correction is worse than the drift it fixes — it introduces a new discrepancy that's harder to trace. Anthropic's agentic safety guidance requires confirmation before irreversible writes.
