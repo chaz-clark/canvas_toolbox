@@ -82,11 +82,11 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 **Goal:** New agent capabilities grounded in pedagogy that actively improve course quality.
 
 **Milestone:** Agents That Teach
-**Status:** Not started
+**Status:** Complete ✅
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
-| #8 | Canvas Schedule Auditor Agent | L | `[ ]` | — |
+| #8 | Canvas Schedule Auditor Agent | L | `[x]` | 12d4a84 |
 
 **Work order:** Single issue. Build after Sprint 3 so the auditor can reason over `course_src/` markdown natively.
 
