@@ -1,0 +1,352 @@
+{
+  "_metadata": {
+    "template_version": "3.1",
+    "agent_details": {
+      "agent_name": "GitHubIssuesAgent",
+      "version": "1.0",
+      "last_updated": "2026-04-17",
+      "description": "Syncs, triages, and closes GitHub issues for canvas_toolbox as a local markdown-based workflow.",
+      "owner": "Chaz Clark",
+      "complexity": "standard"
+    },
+    "companion_files": {
+      "conceptual_guide": "gh_issues_agent.md",
+      "implementation": [
+        "gh_issues_agent/tools/gh_sync.py",
+        "gh_issues_agent/tools/gh_close.py"
+      ],
+      "additional_references": [
+        "gh_issues_agent/knowledge/agile_sprint.md",
+        "gh_issues_agent/knowledge/gh_issues_agent_mission.md",
+        "gh_issues_agent/knowledge/canvas_api_gotchas.md",
+        "gh_issues_agent/knowledge/sprint_qc.md",
+        "gh_issues_agent/knowledge/semantic_versioning.md",
+        "gh_issues_agent/knowledge/github_issues_reference.md"
+      ]
+    }
+  },
+  "agent_type": {
+    "type": "workflow",
+    "description": "Step-by-step workflow: sync → triage → fix → close. API calls to GitHub REST API for read/write on issues."
+  },
+  "implementation": {
+    "workflow_based": {
+      "steps": [
+        {
+          "step": 1,
+          "name": "Check Sprint",
+          "description": "Read agile_sprint.md — find the active sprint and the next [ ] issue in order. Do not pick work outside sprint order without a reason.",
+          "input": "gh_issues_agent/knowledge/agile_sprint.md",
+          "output": "Next issue number to work"
+        },
+        {
+          "step": 2,
+          "name": "Sync",
+          "description": "Pull all open issues + comments from GitHub into .github_issues/open/ as markdown files",
+          "input": "GH_TOKEN, repo (auto-detected or GITHUB_REPO env var)",
+          "output": ".github_issues/open/issue-NNNN-slug.md files"
+        },
+        {
+          "step": 3,
+          "name": "Read Issue",
+          "description": "Open the issue file for the sprint's next item. Read description and all comments before writing any code.",
+          "input": ".github_issues/open/issue-NNNN-slug.md",
+          "output": "Full context for the fix"
+        },
+        {
+          "step": 4,
+          "name": "Fix",
+          "description": "Edit code. Do not commit yet — QC must pass first.",
+          "input": "Issue file context + codebase",
+          "output": "Edited files, uncommitted"
+        },
+        {
+          "step": 5,
+          "name": "QC",
+          "description": "Run sprint QC from sprint_qc.md against CANVAS_SANDBOX_ID. Level 0 (smoke), Level 1 (sandbox pull), Level 2 (sprint-specific tests), Level 3 (quality check). All must pass before committing.",
+          "input": "CANVAS_SANDBOX_ID, sprint_qc.md tests for current sprint",
+          "output": "QC pass/fail result"
+        },
+        {
+          "step": 6,
+          "name": "Commit",
+          "description": "Only after QC passes — commit with message referencing the issue ('fixes #N')",
+          "input": "QC pass confirmation",
+          "output": "Committed fix"
+        },
+        {
+          "step": 7,
+          "name": "Close",
+          "description": "Run gh_close.py --issue N --comment 'Fixed in commit <hash>.' to post comment, close on GitHub, move local file to closed/",
+          "input": "Issue number, commit hash",
+          "output": "Closed issue on GitHub + file in .github_issues/closed/"
+        },
+        {
+          "step": 8,
+          "name": "Update Sprint",
+          "description": "Mark the issue [x] in agile_sprint.md with commit hash. If all sprint issues are [x], run full QC sign-off, then tag per semantic_versioning.md and move sprint to Completed Sprints.",
+          "input": "agile_sprint.md, commit hash, semantic_versioning.md",
+          "output": "Updated sprint tracking + optional version tag"
+        },
+        {
+          "step": 9,
+          "name": "Re-sync",
+          "description": "Run gh_sync.py to confirm all sprint issues are in closed/.",
+          "input": "GitHub API",
+          "output": "Refreshed .github_issues/open/"
+        }
+      ],
+      "entry_point": "uv run python gh_issues_agent/tools/gh_sync.py",
+      "exit_point": "All open/ files resolved; each closed on GitHub with a commit reference"
+    },
+    "api_agent": {
+      "base_url": "https://api.github.com",
+      "authentication": "Bearer token (GH_TOKEN)",
+      "endpoints": "See primary_data.api_endpoints",
+      "rate_limiting": "5,000 requests/hour for authenticated users. Check X-RateLimit-Remaining header."
+    }
+  },
+  "io_contract": {
+    "inputs": [
+      {
+        "name": "GH_TOKEN",
+        "type": "string",
+        "format": "GitHub personal access token",
+        "example": "ghp_xxxxxxxxxxxxxxxxxxxx",
+        "required": true
+      },
+      {
+        "name": "GITHUB_REPO",
+        "type": "string",
+        "format": "owner/repo",
+        "example": "chaz-clark/canvas_toolbox",
+        "required": false,
+        "notes": "Auto-detected from git remote origin if not set"
+      },
+      {
+        "name": "issue_number",
+        "type": "integer",
+        "format": "positive integer",
+        "example": "42",
+        "required": "only for gh_close.py"
+      },
+      {
+        "name": "close_comment",
+        "type": "string",
+        "format": "plain text or markdown",
+        "example": "Fixed in commit abc123. Canvas sync now handles empty modules correctly.",
+        "required": false
+      }
+    ],
+    "outputs": [
+      {
+        "name": "issue_markdown_files",
+        "type": "file",
+        "format": ".md with YAML frontmatter",
+        "example": ".github_issues/open/issue-0042-canvas-sync-fails-on-empty.md",
+        "conditions": "Written on gh_sync.py run"
+      },
+      {
+        "name": "closed_issue_files",
+        "type": "file",
+        "format": ".md (same format, moved)",
+        "example": ".github_issues/closed/issue-0042-canvas-sync-fails-on-empty.md",
+        "conditions": "Written on gh_close.py run or when issue is closed externally"
+      }
+    ],
+    "side_effects": "gh_close.py posts a comment and changes issue state on GitHub (irreversible via script — reopen manually if needed)"
+  },
+  "primary_data": {
+    "label_taxonomy": {
+      "description": "Priority order and handling rules for GitHub issue labels",
+      "labels": [
+        {
+          "label": "bug",
+          "priority": 1,
+          "handling": "Fix before any enhancement work. Every open bug blocks a potential user.",
+          "close_template": "Fixed in commit {hash}. {one-line description of what was broken and what changed}."
+        },
+        {
+          "label": "enhancement",
+          "priority": 2,
+          "handling": "Batch by tool affected (canvas_sync, blueprint_sync, course_quality_check, etc.). Work one tool's enhancements together.",
+          "close_template": "Implemented in commit {hash}. {brief description of what was added and how it works}."
+        },
+        {
+          "label": "documentation",
+          "priority": 3,
+          "handling": "Quick wins — update README, CLAUDE.md.example, or agent guides. Usually resolvable in a single pass.",
+          "close_template": "Updated in commit {hash}. {what was clarified or added}."
+        },
+        {
+          "label": "question",
+          "priority": 4,
+          "handling": "Answer in a comment, then close. If the answer reveals a missing doc, open a documentation issue.",
+          "close_template": "Answered above. Feel free to reopen if you need more detail."
+        },
+        {
+          "label": "duplicate",
+          "priority": 5,
+          "handling": "Close immediately with a reference to the canonical issue.",
+          "close_template": "Duplicate of #{canonical_issue}. Tracking there."
+        },
+        {
+          "label": "wontfix",
+          "priority": 6,
+          "handling": "Close with a clear explanation of why the request is out of scope.",
+          "close_template": "Closing as out of scope: {reason}. {alternative if any}."
+        },
+        {
+          "label": "good first issue",
+          "priority": 7,
+          "handling": "Leave open for contributors. Add a comment with pointers to relevant files if one is not already there.",
+          "close_template": "Fixed by @{contributor} in commit {hash}. Thanks!"
+        }
+      ]
+    },
+    "api_endpoints": [
+      {
+        "name": "list_open_issues",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}/issues",
+        "params": {"state": "open", "per_page": 100, "page": "N"},
+        "notes": "Returns both issues and PRs. Filter by absence of 'pull_request' key."
+      },
+      {
+        "name": "list_comments",
+        "method": "GET",
+        "path": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        "params": {"per_page": 100, "page": "N"},
+        "notes": "Paginated. Fetch all pages if issue.comments > 100."
+      },
+      {
+        "name": "post_comment",
+        "method": "POST",
+        "path": "/repos/{owner}/{repo}/issues/{issue_number}/comments",
+        "body": {"body": "markdown string"},
+        "notes": "Returns 201 on success."
+      },
+      {
+        "name": "close_issue",
+        "method": "PATCH",
+        "path": "/repos/{owner}/{repo}/issues/{issue_number}",
+        "body": {"state": "closed"},
+        "notes": "Returns 200 with updated issue object."
+      },
+      {
+        "name": "check_rate_limit",
+        "method": "GET",
+        "path": "/rate_limit",
+        "notes": "Returns remaining requests and reset timestamp. Use to check before large syncs."
+      }
+    ],
+    "issue_file_format": {
+      "description": "YAML frontmatter + markdown body written by gh_sync.py",
+      "filename_pattern": "issue-{number:04d}-{slug}.md",
+      "slug_rules": "lowercase, spaces→hyphens, non-alphanumeric removed, max 60 chars",
+      "frontmatter_fields": ["issue", "title", "state", "labels", "created", "updated", "author", "url"],
+      "sections": ["# #{number} — {title}", "## Description", "---", "## Comments"],
+      "comment_format": "### @{username} — {YYYY-MM-DD HH:MM UTC}\n\n{body}"
+    },
+    "required_headers": {
+      "Authorization": "Bearer {GH_TOKEN}",
+      "Accept": "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28"
+    }
+  },
+  "dependencies": {
+    "packages": ["requests>=2.33.1", "python-dotenv>=1.2.2"],
+    "files": [
+      "gh_issues_agent/tools/gh_sync.py",
+      "gh_issues_agent/tools/gh_close.py",
+      "gh_issues_agent/knowledge/github_issues_reference.md"
+    ],
+    "environment_variables": [
+      {"name": "GH_TOKEN", "required": true, "description": "GitHub personal access token"},
+      {"name": "GITHUB_REPO", "required": false, "description": "owner/repo — auto-detected from git remote if not set"},
+      {"name": "CANVAS_SANDBOX_ID", "required": false, "description": "Canvas course ID of the sandbox course used for sprint QC testing — safe to read/write during validation runs"}
+    ]
+  },
+  "validation": {
+    "pre_run_checklist": [
+      "GH_TOKEN set in .env",
+      "Token has repo or public_repo scope",
+      "uv sync completed",
+      ".github_issues/ folder exists or will be created by gh_sync.py"
+    ],
+    "post_run_checklist": [
+      "gh_sync: .github_issues/open/ contains files matching open issues on GitHub",
+      "gh_sync: each file has valid YAML frontmatter with issue number, title, url",
+      "gh_close: issue shows as closed on github.com",
+      "gh_close: file moved from open/ to closed/",
+      "gh_close: comment with commit reference visible on GitHub issue"
+    ],
+    "success_criteria": [
+      "gh_sync.py exits 0 and prints count of issues synced",
+      "gh_close.py exits 0 and confirms comment posted + issue closed",
+      "No issue files remain in open/ after all bugs are resolved"
+    ],
+    "test_cases": [
+      {
+        "name": "Sync with no open issues",
+        "input": "Repo has 0 open issues",
+        "expected_output": "Sync complete: 0 open, 0 moved to closed/",
+        "validation_method": "exact"
+      },
+      {
+        "name": "Close with comment",
+        "input": "--issue 42 --comment 'Fixed in commit abc123.'",
+        "expected_output": "Comment posted to #42 + Issue #42 closed on GitHub + file moved to closed/",
+        "validation_method": "regex"
+      },
+      {
+        "name": "Missing GH_TOKEN",
+        "input": "GH_TOKEN not in .env",
+        "expected_output": "ERROR: GH_TOKEN not set in .env",
+        "validation_method": "exact"
+      }
+    ]
+  },
+  "error_handling": {
+    "known_failures": [
+      {
+        "failure": "rate_limit_exceeded",
+        "cause": "More than 5,000 API requests in an hour (unlikely unless repo has hundreds of issues with heavy comment threads)",
+        "mitigation": "Check X-RateLimit-Remaining header. Wait until X-RateLimit-Reset timestamp before retrying."
+      },
+      {
+        "failure": "token_insufficient_scope",
+        "cause": "GH_TOKEN does not have write access to issues",
+        "mitigation": "Regenerate token with repo or public_repo scope. gh_close.py will return 403."
+      },
+      {
+        "failure": "repo_not_detected",
+        "cause": "git remote origin is not set or is not a GitHub URL",
+        "mitigation": "Set GITHUB_REPO=owner/repo in .env explicitly."
+      }
+    ],
+    "retry_strategy": {
+      "max_retries": 3,
+      "backoff": "exponential",
+      "timeout_per_attempt": "30s"
+    }
+  },
+  "operational_guidance": {
+    "when_to_use": [
+      "At the start of each dev session — check agile_sprint.md first, then sync issues",
+      "After pushing a fix — close the issue and update agile_sprint.md",
+      "When a sprint completes — mark it done, review lessons learned, confirm next sprint order",
+      "When new issues are filed — triage against gh_issues_agent_mission.md value streams and add to the appropriate sprint"
+    ],
+    "when_not_to_use": [
+      "Do not run gh_close.py without a committed fix — close only after the change is pushed",
+      "Do not use for PRs — this workflow is issues-only"
+    ]
+  },
+  "cross_references": {
+    "related_agents": [
+      {"name": "canvas_course_expert", "relevance": "For issues about course audit or content quality"},
+      {"name": "canvas_content_sync", "relevance": "For issues about push/pull failures or sync bugs"}
+    ]
+  }
+}
