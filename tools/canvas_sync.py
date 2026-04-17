@@ -183,6 +183,37 @@ def _slug(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# New Quizzes API helpers (separate base path: /api/quiz/v1/)
+# ---------------------------------------------------------------------------
+
+def _get_new_quiz(path: str) -> any:
+    """GET from the New Quizzes engine API (/api/quiz/v1/). Returns parsed JSON or None on error."""
+    url = f"{CANVAS_BASE_URL}/api/quiz/v1{path}"
+    try:
+        resp = requests.get(url, headers=_headers(), timeout=20)
+        if resp.status_code == 404:
+            return None
+        if resp.status_code >= 400:
+            return {"error": resp.text[:200], "status_code": resp.status_code}
+        return resp.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
+def _pull_new_quiz_sidecar(course_id: str, quiz_id: int) -> Optional[dict]:
+    """Pull New Quiz settings and items. Returns combined dict or None if inaccessible."""
+    settings = _get_new_quiz(f"/courses/{course_id}/quizzes/{quiz_id}")
+    if not settings or isinstance(settings, dict) and settings.get("error"):
+        return None
+    items = _get_new_quiz(f"/courses/{course_id}/quizzes/{quiz_id}/items?per_page=100")
+    return {
+        "quiz_engine": "new_quiz",
+        "settings": settings,
+        "items": items if isinstance(items, list) else [],
+    }
+
+
+# ---------------------------------------------------------------------------
 # Pull: Canvas → local files
 # ---------------------------------------------------------------------------
 
@@ -443,7 +474,7 @@ def cmd_init():
                         "lock_at": data.get("lock_at"),
                         "unlock_at": data.get("unlock_at"),
                     }
-                    index["files"][str(filepath)] = {
+                    index_entry = {
                         "canvas_id": content_id,
                         "type": entry_type,
                         "title": item_title,
@@ -453,6 +484,20 @@ def cmd_init():
                         "hash": h,
                         "published": published,
                     }
+
+                    # Pull New Quiz sidecar (settings + items) via /api/quiz/v1/
+                    if entry_type == "NewQuiz":
+                        sidecar = _pull_new_quiz_sidecar(course_id, content_id)
+                        if sidecar:
+                            sidecar_path = mod_dir / f"{item_slug}.newquiz.json"
+                            sidecar_path.write_text(json.dumps(sidecar, indent=2, default=str), encoding="utf-8")
+                            index_entry["quiz_engine"] = "new_quiz"
+                            index_entry["settings_path"] = str(sidecar_path)
+                            _vprint(f"      [newquiz sidecar] {sidecar_path.name}")
+                        else:
+                            _vprint(f"      [newquiz sidecar] skipped — API inaccessible for {item_title}")
+
+                    index["files"][str(filepath)] = index_entry
                     _vprint(f"      [{entry_type.lower()}] {filename}")
 
             elif item_type == "Discussion" and content_id:
@@ -734,6 +779,8 @@ def cmd_init():
                 continue
             if f.name.endswith(".questions.json"):
                 continue  # local-only quiz push source — never Canvas-backed
+            if f.name.endswith(".newquiz.json"):
+                continue  # New Quiz sidecar — tracked separately, not in index["files"]
             rel = str(f)
             if rel not in tracked_paths:
                 f.unlink()
