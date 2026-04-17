@@ -9,6 +9,10 @@ blueprint_course/
 .env
 CLAUDE.md
 
+# GitHub issues workflow — local only
+gh_agent/
+.github_issues/
+
 # Quality reports — generated output
 quality_report.md
 
