@@ -592,6 +592,7 @@ def cmd_init():
         for meta in index["files"].values()
         if meta.get("type") == "Page" and meta.get("page_url")
     }
+    homepage_url = index.get("homepage", {}).get("page_url")
     orphans = [
         {
             "canvas_id": p.get("page_id") or p.get("url"),
@@ -602,6 +603,7 @@ def cmd_init():
         }
         for p in (all_pages if isinstance(all_pages, list) else [])
         if p.get("url") not in linked_page_urls
+        and p.get("url") != homepage_url
     ]
     index["orphaned_pages"] = orphans
     print(f"  {len(orphans)} orphaned pages (not linked in any module)")
@@ -833,14 +835,19 @@ def _push_assignment(filepath: Path, meta: dict) -> bool:
 
 
 def _push_quiz(filepath: Path, meta: dict) -> bool:
-    """Push classic quiz description via the quizzes endpoint."""
+    """Push classic quiz title, description, and points via the quizzes endpoint."""
     canvas_id = meta.get("canvas_id")
     if not canvas_id:
         print(f"    ERROR: no canvas_id in index for {filepath}")
         return False
     data = json.loads(filepath.read_text(encoding="utf-8"))
+    payload: dict = {"description": data.get("description", "")}
+    if "title" in data:
+        payload["title"] = data["title"]
+    if "points_possible" in data:
+        payload["points_possible"] = data["points_possible"]
     result = _put(f"/courses/{CANVAS_COURSE_ID}/quizzes/{canvas_id}", {
-        "quiz": {"description": data.get("description", "")}
+        "quiz": payload
     })
     if result.get("error"):
         print(f"    ERROR: {result['error']}")
