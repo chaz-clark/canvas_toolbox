@@ -2,6 +2,9 @@
 course/
 blueprint_course/
 
+# Markdown workspace — generated from course/ by --build, never committed
+course_src/
+
 # Canvas ID indexes and push logs — course-specific, never committed
 .canvas/
 
