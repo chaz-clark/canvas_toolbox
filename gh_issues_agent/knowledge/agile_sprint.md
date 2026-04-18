@@ -12,12 +12,23 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 
 ---
 
-## Sprint 1 — Trust the Mirror 🔧
+## Active Sprints
+
+*(No active sprints — all issues closed. Open new issues to start Sprint 5.)*
+
+---
+
+## Completed Sprints
+
+---
+
+### Sprint 1 — Trust the Mirror 🔧
 
 **Goal:** Fix bugs where the local mirror silently lies. Every push or pull should do exactly what it says.
 
 **Milestone:** Trust the Mirror
 **Status:** Complete ✅
+**Tag:** v1.0.1
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
@@ -26,21 +37,17 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 | #5 | Classic quiz push missing points_possible | XS | `[x]` | 735463a |
 | #2 | Assignment grading_type + submission_types not round-tripped; stale index on rename | S | `[x]` | 1905e8e |
 
-**Work order:** #1 first (isolated, one-line fix). Then #3 and #5 together (same function, same gap). Then #2 last (broadest scope — pull path + index rebuild + validation).
-
-**Definition of done:**
-- All four issues closed on GitHub with commit references
-- `gh_sync.py` run confirms all moved to `.github_issues/closed/`
-- `course_quality_check.py --test` passes (no regressions)
+**Lessons learned:** #1, #3, #5 were safe to batch in one commit. #2 needed its own — broader scope touching pull path, index rebuild, and validation. Good pattern for future sprints.
 
 ---
 
-## Sprint 2 — Safe to Work In 🏗️
+### Sprint 2 — Safe to Work In 🏗️
 
 **Goal:** Establish safe zones for local-only artifacts. Expand mirror visibility into New Quizzes.
 
 **Milestone:** Safe to Work In
 **Status:** Complete ✅
+**Tag:** v1.1.0
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
@@ -48,59 +55,40 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 | #10 | Automated regression test suite + GitHub Actions CI | M | `[x]` | ae3f9c1 |
 | #6 | New Quizzes pull support — Phase 1: read-only sidecar files | L | `[x]` | 34f6c13 |
 
-**Definition of done:**
-- `course_ref/` is documented and `--pull` does not delete files placed there ✅
-- Regression suite covers all Sprint 1 + Sprint 2 fixes; CI workflow dormant pending BYUI policy ✅
-- New Quizzes pull down as sidecar `.newquiz.json` files with settings + items ✅
-- Index updated with `quiz_engine` and `settings_path` fields ✅
+**Lessons learned:** CI workflow created but triggers commented out pending BYUI policy on storing API tokens in GitHub secrets. Regression suite hits real Canvas sandbox — no mocking, by design.
 
 ---
 
-## Sprint 3 — Author Like a Human ✍️
+### Sprint 3 — Author Like a Human ✍️
 
 **Goal:** Lower the authoring barrier for teachers. Markdown is easier to edit and better for agents.
 
 **Milestone:** Author Like a Human
 **Status:** Complete ✅
+**Tag:** v1.2.0
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
 | #9 | Markdown authoring mirror (course_src/) — Phase 1: pages only | XL | `[x]` | 24764b0 |
 | #7 | Canvas file upload for .docx templates — Phase 1: upload + store URL | M | `[x]` | 66b2342 |
 
-**Work order:** #9 first. The markdown mirror establishes `course_src/` as a pattern. File upload (#7) can use `course_ref/` (from Sprint 2) as its local home for template files.
-
-**Definition of done:**
-- `--pull` optionally populates `course_src/` with `.md` versions of Canvas pages ✅
-- Build step compiles `course_src/*.md` → `course/*.html` before push ✅
-- File upload pushes local assets to Canvas Files and stores `canvas_file_id` + URL in index ✅
+**Lessons learned:** Canvas file upload uses a two-step pre-signed URL flow — not a simple multipart POST. `course_src/` markdown mirrors are now the foundation for Sprint 4 agent work.
 
 ---
 
-## Sprint 4 — Agents That Teach 🤖
+### Sprint 4 — Agents That Teach 🤖
 
 **Goal:** New agent capabilities grounded in pedagogy that actively improve course quality.
 
 **Milestone:** Agents That Teach
 **Status:** Complete ✅
+**Tag:** v1.3.0
 
 | # | Issue | Size | Status | Commit |
 |---|---|---|---|---|
 | #8 | Canvas Schedule Auditor Agent | L | `[x]` | 12d4a84 |
 
-**Work order:** Single issue. Build after Sprint 3 so the auditor can reason over `course_src/` markdown natively.
-
-**Definition of done:**
-- Agent reads setup notes and infers scheduling rules
-- Produces week-by-week audit table flagging date drift
-- Proposes corrected `due_at`, `lock_at`, `unlock_at` values with UTC offsets
-- Propose-before-execute pattern enforced (no silent writes)
-
----
-
-## Completed Sprints
-
-*(None yet — updated as sprints finish)*
+**Lessons learned:** Agent needs a clarify-before-audit phase — ambiguous setup notes language causes systematic wrong flags. Institution-specific rules (BYUI: no Sunday dates, W05 Student Feedback) must be keyed by institution, not hardcoded. DS 250 cross-course read-only test validated agent logic; clarification session pending.
 
 ---
 
@@ -108,6 +96,6 @@ Tracks active and completed sprints for canvas_toolbox. Updated when issues are 
 
 When closing an issue:
 1. Mark its row `[x]` and fill in the commit hash
-2. When all issues in a sprint are `[x]`, mark the sprint Status as **Complete** and move it to Completed Sprints below
+2. When all issues in a sprint are `[x]`, mark the sprint Status as **Complete** and move it to Completed Sprints above
 3. Run `gh_sync.py` to confirm all sprint issues are in `.github_issues/closed/`
-4. Note any scope changes or lessons learned in the sprint's notes before archiving
+4. Note lessons learned before archiving
