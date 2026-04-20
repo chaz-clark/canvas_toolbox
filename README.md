@@ -50,6 +50,57 @@ That's the core loop. Everything else builds on it.
 
 ---
 
+## Using canvas_toolbox as an upstream for course repos
+
+The common pattern: each Canvas course gets its own git repo (for that semester's `course/` state, CLAUDE.md, answer keys, etc.), and pulls **scripts and agents** from canvas_toolbox as an upstream. This keeps tooling in sync across many courses while each course owns its own content.
+
+### Initial setup (in the downstream course repo)
+
+```bash
+git remote add upstream https://github.com/chaz-clark/canvas_toolbox.git
+git fetch upstream
+```
+
+### Pulling updates from upstream
+
+**Do not use `git pull upstream main`.** The two repos have unrelated histories and different content. Instead, cherry-pick just the files canvas_toolbox owns:
+
+```bash
+git fetch upstream
+git checkout upstream/main -- tools/ agents/ .env.example .gitignore README.md
+git status                              # review the changes
+git commit -m "sync canvas_toolbox upstream"
+```
+
+Run this any time you want the latest tooling. Safe to re-run — `course/`, `.env`, `CLAUDE.md`, and everything in `.canvas/` are untouched.
+
+**Why not `--allow-unrelated-histories`:** that permanently fuses the two repos' histories. From then on every pull drags in *all* of canvas_toolbox's commits, including ones you don't want. The selective checkout above is the intended workflow, not a workaround.
+
+### What upstream owns vs. what the course repo owns
+
+| Upstream (canvas_toolbox)     | Course repo                            |
+|-------------------------------|----------------------------------------|
+| `tools/` (Python scripts)     | `course/` (live course mirror)         |
+| `agents/` (agent guides)      | `.env` (credentials, course IDs)       |
+| `.env.example`                | `CLAUDE.md` (course-specific context)  |
+| `.gitignore`                  | `course_ref/` (local-only artifacts)   |
+| `README.md`                   | `.canvas/` (per-course indexes)        |
+
+### Pushing improvements back upstream
+
+If you improve a script or agent and want the fix to reach other courses, push it to canvas_toolbox directly — don't try to push from a downstream course repo.
+
+```bash
+# in the canvas_toolbox repo
+git checkout main
+# make the same edit here
+git commit -m "..."
+git push origin main
+# then in each course repo, run the sync command above
+```
+
+---
+
 ## What it does
 
 | Tool | Purpose |

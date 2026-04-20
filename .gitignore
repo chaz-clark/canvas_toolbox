@@ -15,6 +15,10 @@ CLAUDE.md
 # GitHub issues workflow — local only
 .github_issues/
 
+# gh_issues_agent is an upstream subtree — do not commit changes here.
+# Make edits locally, then push to the upstream repo via git subtree push.
+gh_issues_agent/
+
 # Quality reports — generated output
 quality_report.md
 
