@@ -10,7 +10,7 @@
 
 ## Mission
 
-**What it does**: Analyzes Canvas course exports against three complementary frameworks — cognitive load theory, John Hattie's 3-Phase Learning Model, and Toyota gap analysis — then proposes specific improvements and applies approved changes to the live course via the Canvas API.
+**What it does**: Analyzes Canvas courses against a seven-framework instructional-design stack — Cognitive Load Theory, Hattie's 3-Phase Learning Model, Three Domains of Learning, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, and Toyota Gap Analysis — then proposes specific improvements and applies approved changes to the live course via the Canvas API. Each framework lives in a self-contained reference under [`knowledge/`](knowledge/README.md); the agent emits up to five audit tag dimensions per issue (`hattie_phase`, `cognitive_load_type`, `learning_domain`, `sequencing`, `design_mode`) plus the Toyota A3 wrapper.
 
 **Why it exists**: Instructors spend hours manually reviewing Canvas course structure and cross-referencing BYUI design standards. Courses frequently suffer from module bloat, inconsistent naming, buried instructions, and navigation friction — all of which increase student cognitive load and block progression through Hattie's learning phases. This agent automates the audit, surfaces gaps with root causes, and makes applying fixes safe, reviewable, and fast.
 
@@ -132,6 +132,16 @@ Each audit issue is tagged with a `learning_domain` field (`cognitive`, `affecti
 
 ---
 
+## BYUI Taxonomy Explorer (Institutional View)
+
+> Full reference: [`knowledge/taxonomy_explorer_knowledge.md`](knowledge/taxonomy_explorer_knowledge.md)
+
+BYUI's institutional verb-classification tool. Same three domains as Wilson, but uses **Simpson's 7-level psychomotor** (Perception → Origination) instead of Harrow. When a course's outcomes were authored using the BYUI Taxonomy Explorer (or faculty prefer the BYUI institutional framing), the agent applies this file's classifications and emits a `taxonomy_source` field (`byui_explorer` or `wilson` or `agnostic`).
+
+Default behavior: if `CANVAS_BASE_URL` resolves to BYUI, the agent prefers the BYUI Taxonomy Explorer view and asks the instructor before falling back to Wilson. Cognitive (Bloom Revised) and Affective (Krathwohl) verb levels match between sources — only psychomotor diverges.
+
+---
+
 ## Experiential Learning (Brain-Aligned Sequencing)
 
 > Full reference: [`knowledge/experiential_learning_knowledge.md`](knowledge/experiential_learning_knowledge.md)
@@ -140,7 +150,19 @@ The brain-aligned counter-balance to Hattie. Hattie names the *phases* of learni
 
 Each audit issue gains a `sequencing` field (`experience_first`, `explanation_first`, or `not_applicable`). Modules that open with long readings or vocabulary lists before any encounter with the phenomenon are flagged `explanation_first` — directly relevant to STEM/IT/CS courses where Aswad calls out programming, AI, and cybersecurity as disciplines that learn best experientially.
 
-The four audit tags now combine: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains), delivered in *which sequence* (experiential).
+---
+
+## Designer Thinking (Backward Design)
+
+> Full reference: [`knowledge/designer_thinking_knowledge.md`](knowledge/designer_thinking_knowledge.md)
+
+Five-stage backward design: **Outcome → Evidence → Experience → Content → Reality Check.** Diagnoses whether a course was built backward from outcomes (designer mode) or forward from content (teacher mode). Each audit issue gains a `design_mode` field (`teacher` or `designer`). The high-value catch is content-heavy modules where the assessment doesn't actually evidence the claimed outcome — common when courses are built by accumulating content rather than by working backward from what students should be able to do.
+
+---
+
+## Tag stack — what every audit issue can carry
+
+The five tag dimensions combine for a full diagnosis: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains / Taxonomy Explorer), delivered in *which sequence* (Experiential), built in *which mode* (Designer Thinking).
 
 ---
 
@@ -348,6 +370,50 @@ Run --push to sync changes to Canvas.
 
 ---
 
+## Adaptive Reporting — match the report to what the user wants
+
+The agent does **not** dump every tag dimension on every issue every time. Match the report to what the instructor actually wants to look at.
+
+### When the user gives a focus, narrow to it
+
+| User request | Agent behavior |
+|---|---|
+| "Audit the whole course" | Run all 7 frameworks; emit all tag dimensions on each issue. |
+| "Just check navigation / module structure" | Run CLT (extraneous-load focus) + Hattie Surface phase only. Emit `cognitive_load_type` + `hattie_phase`. |
+| "Check whether outcomes match assessments" | Run Designer Thinking + Three Domains/Taxonomy Explorer. Emit `design_mode` + `learning_domain`. |
+| "Audit module 3 only" | Run all frameworks but scope `course_data` to that module. |
+| "Is the sequencing brain-aligned?" | Run Experiential Learning + Hattie. Emit `sequencing` + `hattie_phase`. |
+| "Does the course cover affective domain?" | Run Three Domains (or Taxonomy Explorer if BYUI). Emit `learning_domain`. |
+| No specific focus given | Ask: *"Want a full 7-framework audit, or focus on one area? (navigation, outcomes/assessments, sequencing, domain coverage, BYUI verb classification, or backward-design alignment)"* |
+
+### Report format adapts too
+
+- **Full audit** → grouped by Toyota A3, every tag dimension shown, score 0–100
+- **Focused audit** → only the tag dimensions relevant to the focus, sorted by severity
+- **Single-module audit** → flat list of issues, no score, ranked by impact
+
+The Toyota A3 wrapper (`Current → Target → Gap → Root Cause → Countermeasure → Verification`) is always used for proposed changes regardless of focus.
+
+---
+
+## When the user asks "What can you do for me?"
+
+If the instructor opens with a generic capability question — *"what can you do?"*, *"how do you help?"*, *"what should I ask you?"* — respond with this short TLDR before doing anything else:
+
+> I audit Canvas courses and apply approved changes. Specifically:
+>
+> 1. **Mirror your course locally** — `course/` folder is the source of truth; Canvas is the sync target.
+> 2. **Audit against 7 instructional-design frameworks** — Cognitive Load, Hattie 3-Phase, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis.
+> 3. **Frame every finding as a Toyota A3 gap** — current state → target state → gap → root cause → countermeasure → verification. No flat to-do lists.
+> 4. **Propose before applying** — every Canvas write shows you a before/after preview and waits for approval.
+> 5. **Adapt the report to your focus** — full audit, single module, or one framework axis. Tell me what you care about and I'll narrow it.
+>
+> Try one of: *"Audit the whole course"*, *"Check Module 3 only"*, *"Are my outcomes matching my assessments?"*, *"Is the sequencing brain-aligned?"*
+
+Then ask which they want.
+
+---
+
 ## Validation and Testing
 
 ### Quick Validation
@@ -392,7 +458,8 @@ See `canvas_course_expert.json` → `validation.test_cases` for:
 | **Purpose** | Audit Canvas courses against cognitive load theory, Hattie's 3-phase model, and BYUI standards; apply fixes via Toyota gap analysis |
 | **Input** | `course/` folder (from `canvas_sync.py --init`) + Canvas API credentials |
 | **Output** | Gap analysis change plan (A3 format) + applied course changes |
-| **Audit Frameworks** | Cognitive Load Theory · Hattie Surface→Deep→Transfer · Toyota A3 Gap Analysis |
+| **Audit Frameworks** | Cognitive Load Theory · Hattie 3-Phase · Three Domains of Learning · BYUI Taxonomy Explorer · Experiential Learning · Designer Thinking · Toyota A3 Gap Analysis |
+| **Audit Tags Emitted** | `hattie_phase` · `cognitive_load_type` · `learning_domain` · `taxonomy_source` · `sequencing` · `design_mode` |
 | **Agent Type** | `llm_agent` |
 | **Complexity** | complex |
 | **Key Files** | `canvas_course_expert.json`, `canvas_api_tool.py` |

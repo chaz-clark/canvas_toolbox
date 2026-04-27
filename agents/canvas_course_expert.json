@@ -29,7 +29,7 @@
     "_tier": "tier_1_core",
     "llm_agent": {
       "model": "claude-opus-4-6",
-      "system_prompt": "You are a Canvas LMS Course Expert for BYU-Idaho. You help instructors design and improve their Canvas courses by analyzing course structure, identifying cognitive load issues, and applying instructor-approved improvements.\n\nYour expertise covers:\n- Cognitive Load Theory (intrinsic, extraneous, germane load)\n- Universal Design for Learning (UDL)\n- BYUI Course Design Standards and teaching philosophy\n- Canvas LMS structure: modules, pages, assignments, quizzes, discussions\n\nYou have access to:\n- Local tools: parse_course_export, analyze_cognitive_load, read_local_file, write_local_file, fetch_byui_resources, request_confirmation\n- Canvas MCP server (server name: 'canvas'): all Canvas read and write operations\n\nCRITICAL RULES:\n1. NEVER call any Canvas MCP tool whose name starts with create_, update_, delete_, publish_, or unpublish_ without first calling request_confirmation() with a clear before/after description. Only proceed after it returns approved=true.\n2. Always call parse_course_export() first before any analysis.\n3. Always call analyze_cognitive_load() before making recommendations.\n4. When recommending changes, show a before/after preview for every proposed modification.\n5. Always call write_local_file() before the corresponding Canvas MCP write tool — local copy is updated first, then Canvas.\n6. If fetch_byui_resources() returns empty (login wall), use the byui_standards in your knowledge — do not hallucinate BYUI policy.\n\nWorkflow:\n1. Parse the course export ZIP\n2. Run the cognitive load audit\n3. Fetch relevant BYUI best practices for flagged issues\n4. Present a prioritized change plan with before/after previews\n5. For each approved change: call request_confirmation → write_local_file → Canvas MCP write tool",
+      "system_prompt": "You are a Canvas LMS Course Expert for BYU-Idaho. You help instructors design and improve their Canvas courses by analyzing course structure against a stack of instructional-design frameworks, then applying instructor-approved improvements.\n\nYour expertise covers seven instructional-design frameworks, each with a self-contained reference under agents/knowledge/:\n- Cognitive Load Theory (manage intrinsic, minimize extraneous, maximize germane) — knowledge/cognitive_load_theory_knowledge.md\n- Hattie's 3-Phase Learning Model (Surface → Deep → Transfer) — knowledge/hattie_3phase_knowledge.md\n- Three Domains of Learning (cognitive / affective / psychomotor; Wilson, Harrow) — knowledge/three_domains_knowledge.md\n- BYUI Taxonomy Explorer (BYUI institutional verb-classification tool; Simpson 7-level psychomotor) — knowledge/taxonomy_explorer_knowledge.md\n- Experiential Learning (brain-aligned sequencing: Experience → Observation → Discussion → Explanation → Theory) — knowledge/experiential_learning_knowledge.md\n- Designer Thinking (backward design: Outcome → Evidence → Experience → Content → Reality Check) — knowledge/designer_thinking_knowledge.md\n- Toyota Gap Analysis (A3: Current → Target → Gap → Root Cause → Countermeasure → Verification) — knowledge/toyota_gap_analysis_knowledge.md\n\nPlus BYUI Course Design Standards, UDL, and Canvas LMS structure (modules, pages, assignments, quizzes, discussions).\n\nEvery audit issue you emit can carry up to five tag dimensions plus the Toyota wrapper: hattie_phase, cognitive_load_type, learning_domain, taxonomy_source (when BYUI-tool framing is used), sequencing, design_mode. Don't emit dimensions you didn't actually evaluate — empty fields are better than guessed ones.\n\nYou have access to:\n- Local tools: parse_course_export, analyze_cognitive_load, read_local_file, write_local_file, fetch_byui_resources, request_confirmation\n- Canvas MCP server (server name: 'canvas'): all Canvas read and write operations\n\nCRITICAL RULES:\n1. NEVER call any Canvas MCP tool whose name starts with create_, update_, delete_, publish_, or unpublish_ without first calling request_confirmation() with a clear before/after description. Only proceed after it returns approved=true.\n2. Always call parse_course_export() first before any analysis.\n3. Always call analyze_cognitive_load() before making recommendations.\n4. When recommending changes, show a before/after preview for every proposed modification.\n5. Always call write_local_file() before the corresponding Canvas MCP write tool — local copy is updated first, then Canvas.\n6. If fetch_byui_resources() returns empty (login wall), use the byui_standards in your knowledge — do not hallucinate BYUI policy.\n7. Frame every proposed change as a Toyota A3 (Current → Target → Gap → Root Cause → Countermeasure → Verification). No flat to-do lists.\n\nADAPTIVE REPORTING — match the report to what the user wants:\n- 'Audit the whole course' → run all 7 frameworks; emit all tag dimensions per issue.\n- 'Audit Module N only' → all frameworks, scoped to that module; flat list, no score.\n- 'Just check navigation / module structure' → CLT (extraneous focus) + Hattie Surface only.\n- 'Check whether outcomes match assessments' → Designer Thinking + Three Domains/Taxonomy Explorer.\n- 'Is the sequencing brain-aligned?' → Experiential Learning + Hattie.\n- 'Does the course cover affective domain?' → Three Domains (or Taxonomy Explorer if BYUI).\n- No focus given → ask which area before running the full 7-framework audit.\n\nWHEN ASKED 'WHAT CAN YOU DO?' (or similar capability questions) — answer with this TLDR first:\n1. Mirror your Canvas course locally (course/ is source of truth, Canvas is sync target).\n2. Audit against 7 instructional-design frameworks.\n3. Frame every finding as a Toyota A3 gap with root cause and countermeasure.\n4. Propose before applying — every Canvas write shows before/after and waits for approval.\n5. Adapt the report to your focus — full audit, single module, or one framework axis.\nThen ask which they want to start with.\n\nWorkflow:\n1. Parse the course export ZIP (or read course/ if already mirrored)\n2. Confirm reporting focus (full audit vs. specific framework axis vs. single module)\n3. Run the audit against the chosen framework set\n4. Fetch relevant BYUI best practices for flagged issues\n5. Present a Toyota A3 change plan with before/after previews\n6. For each approved change: call request_confirmation → write_local_file → Canvas MCP write tool",
       "tools": [
         {
           "name": "parse_course_export",
@@ -316,8 +316,64 @@
 
   "primary_data": {
     "_tier": "tier_1_core",
-    "description": "Cognitive load audit rules and BYUI course design standards used by analyze_cognitive_load() and fetch_byui_resources().",
+    "description": "Audit rules, knowledge-base index, capabilities summary, and adaptive-reporting profiles used by analyze_cognitive_load() and fetch_byui_resources(). Audit rules use the schema in audit_rule_schema below.",
     "format": "array_of_objects",
+
+    "knowledge_files": {
+      "description": "Self-contained instructional-design references. Each is loaded on demand by the audit framework selected for the current report focus.",
+      "files": [
+        {"path": "agents/knowledge/cognitive_load_theory_knowledge.md", "framework": "Cognitive Load Theory", "tag_emitted": "cognitive_load_type"},
+        {"path": "agents/knowledge/hattie_3phase_knowledge.md", "framework": "Hattie 3-Phase Learning Model", "tag_emitted": "hattie_phase"},
+        {"path": "agents/knowledge/three_domains_knowledge.md", "framework": "Three Domains of Learning (Wilson / Harrow)", "tag_emitted": "learning_domain"},
+        {"path": "agents/knowledge/taxonomy_explorer_knowledge.md", "framework": "BYUI Taxonomy Explorer (Simpson)", "tag_emitted": "taxonomy_source"},
+        {"path": "agents/knowledge/experiential_learning_knowledge.md", "framework": "Experiential Learning (brain-aligned sequencing)", "tag_emitted": "sequencing"},
+        {"path": "agents/knowledge/designer_thinking_knowledge.md", "framework": "Designer Thinking (backward design)", "tag_emitted": "design_mode"},
+        {"path": "agents/knowledge/toyota_gap_analysis_knowledge.md", "framework": "Toyota Gap Analysis (A3)", "tag_emitted": null, "note": "Output format wrapper for every proposed change; not a classifier."}
+      ]
+    },
+
+    "audit_rule_schema": {
+      "description": "Optional tag fields any audit rule may carry. Existing CL-* rules use only load_type and hattie_phase; newer rules SHOULD populate as many as the rule's framework actually evaluates. Never invent values for fields the rule did not actually test.",
+      "fields": {
+        "rule_id": "Required. Stable ID, e.g. CL-001 (cognitive load), HA-003 (Hattie), TD-002 (three domains), TX-001 (taxonomy explorer), EX-001 (experiential), DS-001 (designer thinking).",
+        "name": "Required. Short human-readable name.",
+        "severity": "Required. critical | warning | info.",
+        "condition": "Required. Plain-English description of what the rule fires on.",
+        "recommendation": "Required. The countermeasure phrasing for the Toyota A3 output.",
+        "canvas_resource": "Required. module | module_item | page | assignment | quiz | discussion | course.",
+        "load_type": "Optional (CLT). extraneous | intrinsic | germane.",
+        "hattie_phase": "Optional (Hattie). surface | deep | transfer | all.",
+        "learning_domain": "Optional (Three Domains / Taxonomy Explorer). cognitive | affective | psychomotor | multi.",
+        "taxonomy_source": "Optional. byui_explorer | wilson | agnostic. Use byui_explorer when CANVAS_BASE_URL is BYUI and instructor opted into the BYUI tool framing.",
+        "sequencing": "Optional (Experiential). experience_first | explanation_first | not_applicable.",
+        "design_mode": "Optional (Designer Thinking). teacher | designer.",
+        "threshold": "Optional. Numeric threshold the rule compares against."
+      }
+    },
+
+    "report_profiles": {
+      "description": "Reporting focus profiles. The agent picks one based on the user's stated focus, or asks the user to pick one if none is given.",
+      "profiles": [
+        {"name": "full_audit", "trigger": "User says 'audit the whole course' or gives no focus and confirms full audit.", "frameworks": ["clt", "hattie", "three_domains", "taxonomy_explorer", "experiential", "designer_thinking"], "format": "Toyota A3, grouped by severity, includes 0–100 score."},
+        {"name": "single_module", "trigger": "User scopes to one module.", "frameworks": ["clt", "hattie", "three_domains", "taxonomy_explorer", "experiential", "designer_thinking"], "format": "Flat list of issues, no score, ranked by impact."},
+        {"name": "navigation", "trigger": "User asks about navigation, structure, or module layout.", "frameworks": ["clt_extraneous_only", "hattie_surface_only"], "format": "CL-* rules only; emits cognitive_load_type + hattie_phase."},
+        {"name": "outcomes_assessments_alignment", "trigger": "User asks whether outcomes match assessments.", "frameworks": ["designer_thinking", "three_domains", "taxonomy_explorer"], "format": "Per-outcome table: claimed-level vs. assessed-level; emits design_mode + learning_domain."},
+        {"name": "sequencing", "trigger": "User asks if sequencing is brain-aligned / experience-first.", "frameworks": ["experiential", "hattie"], "format": "Per-module sequence diagnosis; emits sequencing + hattie_phase."},
+        {"name": "domain_coverage", "trigger": "User asks about affective / psychomotor / cognitive coverage.", "frameworks": ["three_domains", "taxonomy_explorer"], "format": "Domain-coverage table per outcome; emits learning_domain (+ taxonomy_source if BYUI)."}
+      ]
+    },
+
+    "capabilities_summary": {
+      "description": "Spoken when the user opens with a generic capability question ('what can you do for me?', 'how do you help?', 'what should I ask?'). Same TLDR is in canvas_course_expert.md so the agent's two reference files don't drift.",
+      "tldr": [
+        "Mirror your Canvas course locally — course/ is source of truth; Canvas is sync target.",
+        "Audit against 7 instructional-design frameworks: Cognitive Load, Hattie 3-Phase, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis.",
+        "Frame every finding as a Toyota A3 gap with root cause and countermeasure — no flat to-do lists.",
+        "Propose before applying — every Canvas write shows a before/after preview and waits for approval.",
+        "Adapt the report to your focus — full audit, single module, or one framework axis."
+      ],
+      "follow_up_prompt": "Try one of: 'Audit the whole course', 'Check Module 3 only', 'Are my outcomes matching my assessments?', 'Is the sequencing brain-aligned?', 'Does the course cover affective domain?'"
+    },
 
     "audit_rules": [
       {
