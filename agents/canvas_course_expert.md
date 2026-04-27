@@ -102,11 +102,45 @@ For tool definitions and API endpoint mappings, see `canvas_course_expert.json`.
 
 ## Hattie's 3-Phase Learning Model
 
-> Full reference: [`hattie_3phase_knowledge.md`](hattie_3phase_knowledge.md)
+> Full reference: [`knowledge/hattie_3phase_knowledge.md`](knowledge/hattie_3phase_knowledge.md)
 
 The agent audits each module for gaps across Hattie's three phases: **Surface** (acquiring foundational knowledge) → **Deep** (connecting and understanding) → **Transfer** (applying to new contexts). A gap in an earlier phase blocks progression to the next.
 
 Every audit issue is tagged with a `hattie_phase` field (`surface`, `deep`, `transfer`, or `all`). Fix `all` issues first, then `surface` before `deep` before `transfer`. The full Canvas indicators, gap signals, and BYUI element mapping are in the knowledge file.
+
+---
+
+## Cognitive Load Theory
+
+> Full reference: [`knowledge/cognitive_load_theory_knowledge.md`](knowledge/cognitive_load_theory_knowledge.md)
+
+Hattie sequences learning across phases; CLT addresses the working-memory mechanics that determine whether any phase can succeed. The agent tags every audit issue with a `cognitive_load_type` field — `extraneous` (design friction), `intrinsic` (content sequencing), or `germane` (schema-building activity).
+
+**Priority order**: fix `extraneous` first (it's the load designers control directly and it competes with everything else), then check for absent `germane` work, then sequence `intrinsic` load. Pair with the Hattie phase tag for a full diagnosis: *what kind of load* is blocking *which phase of learning*.
+
+---
+
+## Three Domains of Learning
+
+> Full reference: [`knowledge/three_domains_knowledge.md`](knowledge/three_domains_knowledge.md)
+
+Hattie and CLT operate on the **vertical** axis (sequencing, mechanics). The Three Domains add the **horizontal** axis: are the course's learning objectives addressing all the *kinds* of learning the outcomes require — cognitive (thinking), affective (feeling/value), and psychomotor (physical skill)?
+
+Each audit issue is tagged with a `learning_domain` field (`cognitive`, `affective`, `psychomotor`, or `multi`). Most issues will be cognitive. The high-value catches are **affective gaps** (outcomes imply collaboration/judgment/persuasion but no affective objective is named) — common in IT/sciences courses and a known retention risk per Wilson, since emotion drives memory consolidation.
+
+**Boundary rule**: physical activity that *supports* a cognitive outcome (e.g., a coding lab) is tagged `cognitive`, not `psychomotor`. Psychomotor only applies when intentional physical-skill growth is the goal itself.
+
+---
+
+## Experiential Learning (Brain-Aligned Sequencing)
+
+> Full reference: [`knowledge/experiential_learning_knowledge.md`](knowledge/experiential_learning_knowledge.md)
+
+The brain-aligned counter-balance to Hattie. Hattie names the *phases* of learning; experiential learning specifies *how to deliver* them: **Experience → Observation → Discussion → Explanation → Theory**. Traditional explanation-first delivery activates only language and short-term memory; experience-first delivery activates sensory, motor, decision-making, and emotional regions in parallel — producing durable schemas instead of recalled-then-forgotten content.
+
+Each audit issue gains a `sequencing` field (`experience_first`, `explanation_first`, or `not_applicable`). Modules that open with long readings or vocabulary lists before any encounter with the phenomenon are flagged `explanation_first` — directly relevant to STEM/IT/CS courses where Aswad calls out programming, AI, and cybersecurity as disciplines that learn best experientially.
+
+The four audit tags now combine: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains), delivered in *which sequence* (experiential).
 
 ---
 

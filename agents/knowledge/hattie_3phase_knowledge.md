@@ -2,6 +2,7 @@
 
 Source: Hattie, J. (2009). *Visible Learning*. Routledge.
 Used by: `canvas_course_expert.md` (audit framework), `canvas_course_expert.json` (hattie_phase field on each audit rule)
+Companion: [`cognitive_load_theory_knowledge.md`](cognitive_load_theory_knowledge.md) — Hattie sequences learning across phases; CLT addresses the working-memory mechanics within each phase.
 
 ---
 
@@ -40,7 +41,7 @@ Students acquire foundational knowledge — the "what" and "how." They need clea
 
 ### Cognitive load connection
 
-Surface gaps are almost always **extraneous load** — friction caused by poor design, not content complexity. Extraneous load competes directly with intrinsic load (the actual difficulty of the material). Fix extraneous load first.
+Surface gaps are almost always **extraneous load**. See [`cognitive_load_theory_knowledge.md`](cognitive_load_theory_knowledge.md) for load mechanics and the working-memory limit that justifies the ≤7 items rule.
 
 ---
 
@@ -67,7 +68,7 @@ Students connect ideas, find patterns, and build understanding — the "why" and
 
 ### Cognitive load connection
 
-Deep learning gaps often involve **germane load** — the productive cognitive work of building schema. Germane load is good; the design problem is when it's absent. A module with no synthesis activity has no germane load — students memorize but don't understand.
+Deep learning gaps often mean **germane load is absent** — no activity is doing the schema-building work. See [`cognitive_load_theory_knowledge.md`](cognitive_load_theory_knowledge.md) for germane-load audit indicators.
 
 ---
 
@@ -94,7 +95,7 @@ Students apply knowledge to new, unfamiliar contexts — the "what if" and "so w
 
 ### Cognitive load connection
 
-Transfer requires **reduced extraneous load** and **sufficient germane load** — students can't transfer if they're still fighting navigation friction, and they can't transfer if they never built schema in the Deep phase. Transfer gaps are often symptoms of Surface or Deep gaps upstream.
+Transfer requires upstream load discipline — extraneous removed in Surface, germane built in Deep. Transfer gaps are usually symptoms of CLT failures earlier in the sequence. See [`cognitive_load_theory_knowledge.md`](cognitive_load_theory_knowledge.md).
 
 ---
 

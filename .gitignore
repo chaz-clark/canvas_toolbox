@@ -31,3 +31,6 @@ __pycache__/
 # macOS
 .DS_Store
 knowledge/medium_draft_*.md
+
+# Raw source materials distilled into agents/knowledge/ — local only
+agents/pre_knowledge/

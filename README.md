@@ -263,13 +263,19 @@ Note: `canvas_quiz_id` and `course_id` are course-specific — the same quiz has
 uv run python tools/canvas_api_tool.py --test    # smoke tests, no credentials needed
 ```
 
-Scores your course 0–100 across three frameworks:
+Scores your course against a stack of instructional-design frameworks:
 
-**Cognitive Load** (extraneous / intrinsic / germane) — flags unclear navigation, inconsistent naming, buried content.
+| Framework | What it checks |
+|---|---|
+| **Cognitive Load Theory** | Working-memory load — manage intrinsic, minimize extraneous, maximize germane |
+| **Hattie's 3-Phase Model** | Surface → Deep → Transfer progression; gaps at Surface block everything downstream |
+| **Three Domains of Learning** | Cognitive, Affective, Psychomotor coverage (Wilson) |
+| **BYUI Taxonomy Explorer** | Verb-level outcome classification (BYUI institutional view, Simpson psychomotor) |
+| **Experiential Learning** | Brain-aligned sequencing — Experience → Observation → Discussion → Explanation → Theory |
+| **Designer Thinking** | Backward design — Outcome → Evidence → Experience → Content → Reality Check |
+| **Toyota Gap Analysis** | Change-plan format — Current State → Target State → Gap → Root Cause → Countermeasure → Verification |
 
-**Hattie's 3-Phase Model** — Surface (foundational knowledge), Deep (connecting ideas), Transfer (applying to new contexts). Gaps at Surface block everything downstream.
-
-**Toyota Gap Analysis** — Current State → Target State → Gap → Root Cause → Countermeasure → Verification.
+Full descriptions and when-to-use guidance: [`agents/knowledge/README.md`](agents/knowledge/README.md).
 
 ---
 
@@ -324,6 +330,6 @@ Module naming: `Sprint X: Topic (WXX–WXX)` or `Week X: Topic`.
 | `agents/canvas_blueprint_sync.md/.json` | Blueprint sync agent guide + API schema |
 | `agents/canvas_course_expert.md/.json` | Audit agent guide + rules |
 | `agents/canvas_content_sync.md/.json` | Content sync agent guide |
-| `agents/knowledge/` | Hattie 3-phase + Toyota gap analysis references |
+| `agents/knowledge/` | Instructional-design knowledge references (CLT, Hattie, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis) — see [`agents/knowledge/README.md`](agents/knowledge/README.md) |
 | `course/` | Live course mirror — source of truth |
 | `CLAUDE.md.example` | Template for Claude Code project context (CLAUDE.md is gitignored) |
