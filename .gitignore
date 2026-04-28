@@ -12,6 +12,12 @@ course_src/
 .env
 CLAUDE.md
 
+# AI coding tool local memory / caches — per-user, never committed
+.gemini/
+.claude/cache/
+.cursor/
+.aider*
+
 # GitHub issues workflow — local only
 .github_issues/
 

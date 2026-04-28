@@ -1,20 +1,22 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Project context for AI coding tools. This file is auto-loaded by Antigravity, Cursor, VS Code Copilot, OpenAI Codex, Aider, and others. Claude Code reads it as a fallback when no `CLAUDE.md` is present.
+
+> If you create a personal `CLAUDE.md` for local notes, start it with `@AGENTS.md` so this file stays loaded too.
 
 ## What This Is
 
-A Canvas LMS course management toolkit. It mirrors a live Canvas course into a local `course/` folder, audits structure, and applies instructor-approved changes via the Canvas REST API. Three courses can be managed in parallel: source (working), master (template), and blueprint (semester rollout).
+A Canvas LMS course management toolkit. It mirrors a live Canvas course into a local `course/` folder, audits structure against pedagogical frameworks, and applies instructor-approved changes via the Canvas REST API. Three courses can be managed in parallel: source (working), master (template), and blueprint (semester rollout).
 
-Fill in your course IDs and institution below after renaming this file to `CLAUDE.md`.
+Universal toolkit — works with any Canvas institution. Originally built for BYU-Idaho but designed to be institution-agnostic.
 
 ## Course Architecture
 
 | Variable | Course ID | Purpose |
 |---|---|---|
-| `CANVAS_COURSE_ID` | [ID] | Source / working course — `course/` mirrors this |
-| `MASTER_COURSE_ID` | [ID] | Master template — receives pushes from source via `course_mirror.py` |
-| `BLUEPRINT_COURSE_ID` | [ID] | Canvas Blueprint — synced from master; new semester sections cloned from this |
+| `CANVAS_COURSE_ID` | [your ID] | Source / working course — `course/` mirrors this |
+| `MASTER_COURSE_ID` | [your ID] | Master template — receives pushes from source via `course_mirror.py` |
+| `BLUEPRINT_COURSE_ID` | [your ID] | Canvas Blueprint — synced from master; new semester sections cloned from this |
 
 Source → Master → Blueprint is the content flow. Never reverse this direction. If you only have one course, set only `CANVAS_COURSE_ID` and ignore the master/blueprint tools.
 
@@ -22,15 +24,22 @@ Source → Master → Blueprint is the content flow. Never reverse this directio
 
 ```
 agents/                              ← agent guides, configs, knowledge, templates
-  canvas_course_expert.md/.json      ← audit + change agent (cognitive load, Hattie 3-phase)
+  canvas_course_expert.md/.json      ← audit + change agent (7-framework instructional design stack)
   canvas_content_sync.md/.json       ← content push agent
   canvas_blueprint_sync.md/.json     ← blueprint sync agent
+  canvas_schedule_auditor.md/.json   ← rule-based date audit agent
   canvas_semester_setup.md/.json     ← semester due date rollout agent
   canvas_new_course_setup.md         ← step-by-step guide for first-time repo setup
   make_agent.md/.json                ← template for creating new agents
   make_agent_qc.md/.json             ← quality control validator for new agents
-  knowledge/
+  knowledge/                         ← instructional-design references (see knowledge/README.md)
+    README.md                        ← routing guide — which framework for which audit question
+    cognitive_load_theory_knowledge.md
     hattie_3phase_knowledge.md
+    three_domains_knowledge.md
+    taxonomy_explorer_knowledge.md
+    experiential_learning_knowledge.md
+    designer_thinking_knowledge.md
     toyota_gap_analysis_knowledge.md
 tools/                               ← Python CLI scripts (all use uv run python)
   canvas_sync.py                     ← source course mirror (init/status/push/pull)
@@ -49,7 +58,8 @@ course/                              ← live source course mirror (gitignored, 
 blueprint_course/                    ← read-only blueprint mirror (gitignored)
 .canvas/                             ← runtime index files (all gitignored)
 quality_report.md                    ← combined quality report (gitignored, regenerated on demand)
-CLAUDE.md.example                    ← this file — copy to CLAUDE.md and fill in
+AGENTS.md                            ← this file
+CLAUDE.md                            ← optional, gitignored — personal Claude Code notes
 ```
 
 ## Setup
@@ -107,17 +117,20 @@ uv run python tools/canvas_api_tool.py --test
 
 ## Agents
 
-Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, pitfalls) and a `.json` (structured data, API patterns, mappings). Load both when using an agent with Claude Code.
+Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, pitfalls) and a `.json` (structured data, API patterns, mappings). Load both when invoking the agent.
 
 | Agent | Purpose |
 |---|---|
-| `canvas_course_expert` | Audit course content against cognitive load theory and Hattie 3-phase model |
+| `canvas_course_expert` | Audit course content against the 7-framework instructional-design stack (CLT, Hattie, Three Domains, Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota A3) |
 | `canvas_content_sync` | Push page/assignment content changes to Canvas |
 | `canvas_blueprint_sync` | Sync master → blueprint including dates, completion requirements, prerequisites |
+| `canvas_schedule_auditor` | Rule-based date audit — propose-before-execute, with institution-aware rules |
 | `canvas_semester_setup` | Roll due dates forward for a new semester given a Week 1 start date |
 | `canvas_new_course_setup` | First-time setup walkthrough for a new course fork |
 | `make_agent` | Template for creating new agents in this system |
 | `make_agent_qc` | Validate a new agent against make_agent standards |
+
+For framework theory and the routing rules between them, see [`agents/knowledge/README.md`](agents/knowledge/README.md).
 
 ## Sync Limitations
 
@@ -134,6 +147,7 @@ Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, 
 3. **Adding content requires two steps: course + module.** An assignment/quiz/page not linked as a module item is invisible to students. Run `course_quality_check.py` after every push.
 4. **Completion requirements enable the prerequisite chain.** Every item in every locked module must have `must_submit` (assignments/quizzes) or `must_view` (pages/tools) set, or the module lock silently stops enforcing.
 5. **Confirm scope before any write.** Always verify the target course ID before pushing. Master, blueprint, and source are different courses with different IDs.
+6. **`request_confirmation()` must return `approved=true` before any Canvas write.** All audit agents enforce this for any create/update/delete operation.
 
 ## Canvas API Gotchas
 
@@ -145,7 +159,33 @@ Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, 
 - **Quiz IDs**: a classic quiz has both a `quiz_id` (used by module items) and an underlying `assignment_id` (used by `PUT /assignments/:id` for due dates)
 - **Discussions use a different due date field**: `todo_date` in `PUT /discussion_topics/:id`, not `due_at`
 
+## Quality Check Workflow
+
+Run after every push to any course:
+
+```bash
+uv run python tools/course_quality_check.py --all
+```
+
+Report categories:
+- **Auto-fixable** (`--fix`): duplicate assignment groups, assignments, quizzes, module items; orphaned duplicates
+- **Manual review**: published items not in any module, empty modules, dates outside the course window, missing course dates
+
+`quality_report.md` at repo root is the human-readable output. Per-course JSON in `.canvas/quality_report_*.json` is machine-readable for agents.
+
 ## Course-Specific Notes
 
-<!-- Fill in after renaming this file to CLAUDE.md -->
-<!-- Examples: module/sprint structure, grading model, competency thresholds, UTC offset for your timezone, known Canvas quirks for your institution -->
+<!-- Add per-institution notes here: module/sprint structure, grading model, competency thresholds, timezone, known Canvas quirks. Or create a personal CLAUDE.md (gitignored) and put them there. -->
+
+---
+
+## Roadmap
+
+The following items are planned next for this toolkit. Snapshot of the agreed direction toward making canvas_toolbox installable as a cross-tool deployable skill across universities and AI tools.
+
+1. **Convert `canvas_course_expert` → `.agents/skills/canvas-audit/`** — first deployable skill following the [Agent Skills](https://agentskills.io/specification) standard. Parameterize for non-BYUI institutions (institution name, course ID env vars, audit framework subset). Test discovery in Antigravity, VS Code Copilot, and Claude Code.
+2. **Capture conversion pattern as `agents/deploy_agent.md`** — template for transforming a `make_agent`-produced spec into a `.agents/skills/<name>/` package. Sibling to `make_agent.md` (design-time) and `make_agent_qc.md` (validation).
+3. **Convert `canvas_schedule_auditor` using the new template** — validates `deploy_agent.md` on a different agent shape. Confirms the template generalizes.
+4. **Document per-tool quickstart in README** — "Using Claude Code? Just works. Antigravity? Just works. VS Code Copilot? Flip `chat.useAgentsMdFile: true` once. Cursor? Just works."
+
+Vision: another university clones this repo, opens it in whatever AI coding tool they use, and the canvas-audit capability is auto-discovered by their AI — zero install friction beyond clone-and-open.

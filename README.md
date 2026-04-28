@@ -290,6 +290,24 @@ Full descriptions and when-to-use guidance: [`agents/knowledge/README.md`](agent
 
 ---
 
+## Using with AI Coding Tools
+
+This repo ships an `AGENTS.md` at the root that any modern AI coding tool will load as project context. Adoption status:
+
+| Tool | What you do | What happens |
+|---|---|---|
+| **Claude Code** (CLI) | Just open the repo | AGENTS.md is auto-loaded as a fallback when no CLAUDE.md is present. If you keep a personal CLAUDE.md for local notes, start it with `@AGENTS.md` to import this file. |
+| **Antigravity** (Gemini IDE) | Just open the repo | Native AGENTS.md auto-load since v1.20.3 |
+| **VS Code + Copilot** | Set `chat.useAgentsMdFile: true` once in user settings | Copilot loads AGENTS.md for every new chat in this workspace |
+| **VS Code + Claude / ChatGPT extension** | Same setting flip | Same behavior — AGENTS.md is the cross-tool standard |
+| **Cursor** | Just open the repo | Native AGENTS.md auto-load |
+| **OpenAI Codex** (CLI) | Just open the repo | Codex was the original AGENTS.md adopter — native |
+| **Aider, goose, Windsurf, Zed, Jules, JetBrains Junie, Amp** | Just open the repo | All native |
+
+After AGENTS.md loads, ask the agent *"what can you do for me?"* — the canvas_course_expert TLDR is built in.
+
+---
+
 ## BYUI Course Design Conventions
 
 Each student-facing module follows this order:
@@ -332,4 +350,4 @@ Module naming: `Sprint X: Topic (WXX–WXX)` or `Week X: Topic`.
 | `agents/canvas_content_sync.md/.json` | Content sync agent guide |
 | `agents/knowledge/` | Instructional-design knowledge references (CLT, Hattie, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis) — see [`agents/knowledge/README.md`](agents/knowledge/README.md) |
 | `course/` | Live course mirror — source of truth |
-| `CLAUDE.md.example` | Template for Claude Code project context (CLAUDE.md is gitignored) |
+| `AGENTS.md` | Cross-tool project context — auto-loaded by Antigravity, Cursor, VS Code Copilot, Codex, Claude Code (fallback), Aider |
