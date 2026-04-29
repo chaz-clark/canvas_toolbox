@@ -132,6 +132,8 @@ Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, 
 
 For framework theory and the routing rules between them, see [`agents/knowledge/README.md`](agents/knowledge/README.md).
 
+For the agent-engineering taxonomy that distinguishes runtime, capability, and specification layers — and the AI engineering practices for each — see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
+
 ## Sync Limitations
 
 **This is not git.** No commit history, no branching, no conflict detection.
