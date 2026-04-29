@@ -30,8 +30,12 @@ agents/                              ← agent guides, configs, knowledge, templ
   canvas_schedule_auditor.md/.json   ← rule-based date audit agent
   canvas_semester_setup.md/.json     ← semester due date rollout agent
   canvas_new_course_setup.md         ← step-by-step guide for first-time repo setup
-  make_agent.md/.json                ← template for creating new agents
-  make_agent_qc.md/.json             ← quality control validator for new agents
+  make_ai_agents/                    ← subtree from chaz-clark/Make-AI-Agents (canonical source for agent templates)
+    make_agent.md/.json              ← template for creating new agents
+    make_agent_qc.md/.json           ← quality control validator for new agents
+    make_gems/                       ← upstream agent gem definitions
+    source_docs/                     ← upstream source documents
+    update_agents/                   ← upstream agent update workflows
   knowledge/                         ← instructional-design references (see knowledge/README.md)
     README.md                        ← routing guide — which framework for which audit question
     cognitive_load_theory_knowledge.md
@@ -127,8 +131,8 @@ Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, 
 | `canvas_schedule_auditor` | Rule-based date audit — propose-before-execute, with institution-aware rules |
 | `canvas_semester_setup` | Roll due dates forward for a new semester given a Week 1 start date |
 | `canvas_new_course_setup` | First-time setup walkthrough for a new course fork |
-| `make_agent` | Template for creating new agents in this system |
-| `make_agent_qc` | Validate a new agent against make_agent standards |
+| `make_agent` | Template for creating new agents in this system (lives in `agents/make_ai_agents/` subtree) |
+| `make_agent_qc` | Validate a new agent against make_agent standards (lives in `agents/make_ai_agents/` subtree) |
 
 For framework theory and the routing rules between them, see [`agents/knowledge/README.md`](agents/knowledge/README.md).
 
