@@ -1,7 +1,7 @@
 """
 blueprint_sync.py
 
-One-way sync: master course (CANVAS_COURSE_ID) → Blueprint course (BLUEPRINT_COURSE_ID).
+One-way sync: master course (MASTER_COURSE_ID) → Blueprint course (BLUEPRINT_COURSE_ID).
 Master course/ is always the source of truth. Blueprint is overwritten — never read for content.
 No analysis, no LLM, no context loading. Pure mechanical rclone-style copy + push.
 
@@ -71,7 +71,7 @@ if _raw_url and not _raw_url.startswith("http"):
     _raw_url = "https://" + _raw_url
 CANVAS_BASE_URL = _raw_url
 
-MASTER_COURSE_ID = os.environ.get("CANVAS_COURSE_ID", "")
+MASTER_COURSE_ID = os.environ.get("MASTER_COURSE_ID", "")
 BLUEPRINT_COURSE_ID = os.environ.get("BLUEPRINT_COURSE_ID", "")
 
 MASTER_DIR = Path("course")
@@ -98,7 +98,7 @@ def _check_env():
     if not CANVAS_API_TOKEN:
         missing.append("CANVAS_API_TOKEN")
     if not MASTER_COURSE_ID:
-        missing.append("CANVAS_COURSE_ID")
+        missing.append("MASTER_COURSE_ID")
     if not BLUEPRINT_COURSE_ID:
         missing.append("BLUEPRINT_COURSE_ID")
     if missing:
