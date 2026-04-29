@@ -15,6 +15,26 @@ The same principle applies to Canvas courses: most design problems aren't isolat
 
 ---
 
+## Genchi Genbutsu — The Prerequisite to A3
+
+**Genchi Genbutsu (現地現物)** — "go and see for yourself." A core Toyota Production System principle: don't make decisions from reports, dashboards, or theory. Go to **gemba** (the actual place where work happens) and observe the real work in real conditions.
+
+Toyota holds that A3 problem-solving cannot be done honestly without first going to gemba. You cannot accurately fill in *Current State* from a summary, *Gap* from intuition, or *Root Cause* from speculation. Each section requires firsthand observation.
+
+**Applied to Canvas course audits:**
+
+| Toyota concept | Canvas equivalent |
+|---|---|
+| **Gemba** (the real place) | The live `course/` mirror — actual pages, actual module items, actual rubrics, actual student-visible titles |
+| **Genchi Genbutsu** (go and see) | Read the artifacts directly. Don't summarize the course from memory. Don't theorize from the syllabus alone. Don't trust last semester's audit report. |
+| **The trap to avoid** | Filling in A3 sections from the agent's prior knowledge of "what BYUI courses usually look like" instead of what *this specific course* actually contains right now |
+
+**For the audit agent specifically:** before proposing any A3, the agent must call `parse_course_export()` or read the `course/` mirror via `canvas_sync.py`. Producing a *Current State* line without having read the actual content is a Genchi Genbutsu violation — the audit becomes theory dressed up as observation, and the *Root Cause* and *Countermeasure* downstream are unreliable as a result.
+
+**The principle in one line:** an A3 written without going to gemba is a wish list. An A3 written after going to gemba is a plan.
+
+---
+
 ## The A3 Structure (applied to course design)
 
 Each issue in the change plan uses this format:
