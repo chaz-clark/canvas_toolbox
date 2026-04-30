@@ -1,288 +1,145 @@
-# AGENTS.md
+# Canvas Toolbox
 
-Project context for AI coding tools. This file is auto-loaded by Antigravity, Cursor, VS Code Copilot, OpenAI Codex, Aider, and others. Claude Code reads it as a fallback when no `CLAUDE.md` is present.
+A Canvas LMS course management toolkit — mirrors live Canvas courses to local files, audits structure against an 8-framework instructional-design stack, and applies instructor-approved changes via the Canvas REST API.
 
-> If you create a personal `CLAUDE.md` for local notes, start it with `@AGENTS.md` so this file stays loaded too.
+## Project Purpose
 
-## What This Is
+**This is**:
+- A toolkit for managing Canvas courses as code (mirror, edit, audit, push)
+- An 8-framework instructional-design audit engine (Cognitive Load, Hattie 3-Phase, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language, Toyota A3)
+- A multi-course orchestration system (master + blueprint + per-section live courses)
+- Tool-agnostic — works with any LLM coding tool that reads AGENTS.md
+- Originally built for BYU-Idaho; designed to be institution-agnostic
 
-A Canvas LMS course management toolkit. It mirrors a live Canvas course into a local `course/` folder, audits structure against pedagogical frameworks, and applies instructor-approved changes via the Canvas REST API. Three courses can be managed in parallel: source (working), master (template), and blueprint (semester rollout).
+**This is NOT**:
+- A Canvas replacement or LMS
+- A student-facing tool
+- A version-control system for Canvas content (no commit history, no branching, no conflict detection)
+- A NewQuiz or ExternalTool editor (Canvas REST API limitation)
 
-Universal toolkit — works with any Canvas institution. Originally built for BYU-Idaho but designed to be institution-agnostic.
+**Audience**: Instructors and instructional designers who edit Canvas courses, want auditable structure, and use LLM coding tools for course design work.
 
-## Course Architecture
-
-| Variable | Course ID | Purpose |
-|---|---|---|
-| `CANVAS_COURSE_ID` | [your ID] | Source / working course — `course/` mirrors this |
-| `MASTER_COURSE_ID` | [your ID] | Master template — receives pushes from source via `course_mirror.py` |
-| `BLUEPRINT_COURSE_ID` | [your ID] | Canvas Blueprint — synced from master; new semester sections cloned from this |
-
-Source → Master → Blueprint is the content flow. Never reverse this direction. If you only have one course, set only `CANVAS_COURSE_ID` and ignore the master/blueprint tools.
-
-## Folder Structure
-
-```
-agents/                              ← agent guides, configs, knowledge, templates
-  canvas_course_expert.md/.json      ← audit + change agent (7-framework instructional design stack)
-  canvas_content_sync.md/.json       ← content push agent
-  canvas_blueprint_sync.md/.json     ← blueprint sync agent
-  canvas_schedule_auditor.md/.json   ← rule-based date audit agent
-  canvas_semester_setup.md/.json     ← semester due date rollout agent
-  canvas_new_course_setup.md         ← step-by-step guide for first-time repo setup
-  knowledge/                         ← instructional-design references (see knowledge/README.md)
-    README.md                        ← routing guide — which framework for which audit question
-    cognitive_load_theory_knowledge.md
-    hattie_3phase_knowledge.md
-    three_domains_knowledge.md
-    taxonomy_explorer_knowledge.md
-    experiential_learning_knowledge.md
-    designer_thinking_knowledge.md
-    course_design_language_knowledge.md
-    toyota_gap_analysis_knowledge.md
-  templates/                         ← reusable HTML/JSON artifacts (see templates/README.md)
-    README.md                        ← pattern guide — when to use templates vs knowledge files
-    byui_course_design/              ← 11 HTML components + canonical rubric JSON for BYUI courses
-make_ai_agents/                      ← upstream subtree from chaz-clark/Make-AI-Agents — separate tool, gitignored, local working copy only. Populate with: git subtree add --prefix=make_ai_agents https://github.com/chaz-clark/Make-AI-Agents.git main --squash
-gh_issues_agent/                     ← upstream subtree from chaz-clark/gh_issues_agent — separate tool, gitignored, local working copy only
-
-tools/                               ← Python CLI scripts (all use uv run python)
-  canvas_sync.py                     ← source course mirror (init/status/push/pull)
-  sync_context.sh                    ← multi-course wrapper — invokes canvas_sync.py per context (master/s1/s2/blueprint)
-  blueprint_sync.py                  ← master → blueprint sync
-  course_mirror.py                   ← source → master one-off mirror
-  course_quality_check.py            ← duplicate/date/module/floating-item auditor
-  canvas_quiz_questions.py           ← classic quiz question manager
-  canvas_api_tool.py                 ← audit engine + Canvas write functions
-
-# Single-course layout (legacy — works without any wrapper):
-course/                              ← Canvas mirror (gitignored)
-  syllabus.html
-  _course.json
-  [module-slug]/
-    _module.json
-    *.html / *.json                  ← pages (html) and assignment/quiz metadata (json)
-    *.questions.json                 ← classic quiz questions
-.canvas/                             ← runtime index files (gitignored)
-
-# Multi-course layout (when using tools/sync_context.sh):
-master/                              ← master template working dir
-  course/                            ← Canvas mirror for the master
-  course_src/
-  .canvas/index.json
-blueprint/                           ← blueprint working dir (online programs only)
-  course/
-  .canvas/index.json
-s1/                                  ← section 1 working dir
-  course/
-  .canvas/index.json
-s2/                                  ← section 2 working dir (optional, for multi-section semesters)
-  course/
-  .canvas/index.json
-
-quality_report.md                    ← combined quality report (gitignored, regenerated on demand)
-AGENTS.md                            ← this file
-CLAUDE.md                            ← optional, gitignored — personal Claude Code notes
-```
-
-## Setup
-
-See `agents/canvas_new_course_setup.md` for a full walkthrough. Quick path:
-
-```bash
-uv sync
-cp .env.example .env
-# Edit .env — add CANVAS_API_TOKEN, CANVAS_BASE_URL, CANVAS_COURSE_ID,
-#              MASTER_COURSE_ID, BLUEPRINT_COURSE_ID, S1_COURSE_ID (if using sections)
-
-uv run python tools/canvas_sync.py --init           # pull source course into course/
-uv run python tools/blueprint_sync.py --pull        # mirror blueprint + build mapping (if using)
-uv run python tools/course_mirror.py --pull         # map master item IDs (if using)
-```
-
-## Multi-course architecture
-
-A typical course has multiple Canvas instances tied to one shared design:
-
-- **Master** (always 1) — template course where authoring happens
-- **Blueprint** (optional, online programs only) — Canvas Blueprint that semester sections clone from
-- **S1, S2, S3, ...** (per semester, typically 2–3) — live student sections
-
-`canvas_sync.py` itself is single-course — it reads `CANVAS_COURSE_ID` from `.env`, mirrors to `course/`, writes `.canvas/index.json` (all CWD-relative). The orchestration of "which course am I working on right now" lives one layer up, in [`tools/sync_context.sh`](tools/sync_context.sh).
-
-### How `sync_context.sh` works
-
-The wrapper does three things:
-
-1. Reads `.env` to find the course ID for the requested context
-2. Creates and `cd`s into a context folder (`master/`, `s1/`, etc.)
-3. Invokes `canvas_sync.py` from that folder with `CANVAS_COURSE_ID` set
-
-Because every per-course path in `canvas_sync.py` is CWD-relative, each context lands in its own isolated tree:
+## Structure
 
 ```
-master/course/                  master/.canvas/index.json
-s1/course/                      s1/.canvas/index.json
-s2/course/                      s2/.canvas/index.json
+canvas_toolbox/
+├── agents/                ← agent specs, knowledge references, templates
+│   ├── canvas_*.md/.json
+│   ├── knowledge/         ← instructional-design references (see knowledge/README.md)
+│   ├── templates/         ← reusable HTML/JSON artifacts (see templates/README.md)
+│   └── AGENT_LAYERS.md    ← runtime / capability / specification taxonomy
+├── tools/                 ← Python CLI scripts (uv run python)
+│   ├── canvas_sync.py
+│   ├── sync_context.sh    ← multi-course wrapper
+│   ├── blueprint_sync.py
+│   ├── course_mirror.py
+│   ├── course_quality_check.py
+│   ├── canvas_quiz_questions.py
+│   └── canvas_api_tool.py
+├── tests/                 ← regression tests (pytest)
+├── course_ref/            ← local-only artifacts safe from --pull (answer keys, drafts, setup notes)
+├── course_src/            ← markdown authoring workspace (gitignored, --build compiles to course/)
+├── make_ai_agents/        ← upstream subtree (gitignored, separate tool)
+├── gh_issues_agent/       ← upstream subtree (gitignored, separate tool)
+├── master/                ← master course working dir (gitignored, multi-course mode)
+├── s1/, s2/, s3/          ← per-section working dirs (gitignored)
+├── course/                ← legacy single-course mirror (gitignored)
+├── .canvas/               ← runtime indexes and logs (gitignored)
+├── AGENTS.md              ← this file
+└── README.md              ← user-facing documentation and command reference
 ```
 
-Zero changes were needed to `canvas_sync.py` to support this — the script never knows it's running in a "context", and the wrapper doesn't need to understand sync internals. Clean separation.
+For full setup and command reference, see [`README.md`](README.md). For agent-engineering taxonomy (Runtime / Capability / Specification / Tool layers), see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
 
-### .env mapping
+## Working Style
 
-| Context | .env variable | Folder |
-|---|---|---|
-| `master` | `MASTER_COURSE_ID` | `master/` |
-| `blueprint` | `BLUEPRINT_COURSE_ID` | `blueprint/` |
-| `s1` | `S1_COURSE_ID` | `s1/` |
-| `s2` | `S2_COURSE_ID` | `s2/` |
-| `s3` | `S3_COURSE_ID` | `s3/` |
+This project follows the behavioral discipline defined in `make_ai_agents/knowledge/behavioral_discipline.md` (when the upstream `Make-AI-Agents` subtree is populated locally — see Existing Tooling) or the equivalent discipline loaded via the host tool's skill system.
 
-Add additional sections by adding `S<N>_COURSE_ID` to `.env` — the wrapper resolves any `s<N>` context up to `s99`.
+In short, every contributor — human or LLM — operates under these principles: read before claiming, plan before acting on changes, stop on the first defect rather than papering over, find root causes for bugs, document non-trivial changes in a structured form, generate exactly what was asked (no speculative additions), produce mistake-proof outputs, reflect and tell the user about non-obvious learnings, and respect the user's intent without substitution or drift.
 
-### Usage
+For the full principles and override rules, see `knowledge/behavioral_discipline.md` → "The Ten Principles". The four no-override principles (P-001 Read Before Claiming, P-003 Stop on Defect, P-007 Pull Don't Push, P-010 Respect Intent) apply unconditionally.
 
-```bash
-tools/sync_context.sh master --pull              # pull master into master/course/
-tools/sync_context.sh master --status            # status for master
-tools/sync_context.sh s1 --pull                  # pull section 1
-tools/sync_context.sh s2 --push "sprint-1"       # push one module of section 2
-tools/sync_context.sh blueprint --pull           # pull blueprint
-tools/sync_context.sh master --build             # build markdown → HTML for master
-```
+**Project-specific rules**:
+- **Local files are source of truth.** Canvas is the sync target, not the source. Never treat Canvas as authoritative unless `--pull` was just run.
+- **Canvas IDs are course-specific.** Match content across courses by title, never by ID. The same assignment has different IDs in master, blueprint, and every section.
+- **Adding content requires two steps: course + module.** Creating an assignment, quiz, or page is not enough — it must also be added as a module item, or students cannot find it.
+- **Confirm scope before any write.** Master, blueprint, and sections are different courses with different IDs. A push scoped wrong replicates to the wrong course.
+- **`request_confirmation()` must return `approved=true` before any Canvas write.** Audit agents enforce this; honor it manually too.
+- **Run `course_quality_check.py` after every push** — surfaces orphaned items, duplicates, and dates outside the course window.
+- **Completion requirements enable the prerequisite chain.** Sequential sprint locks silently fail if any item lacks `must_submit` (assignments, quizzes) or `must_view` (pages, tools, URLs).
 
-Single-course users without sections can keep using `tools/canvas_sync.py` directly with `course/` at repo root — the wrapper is opt-in.
+## Active Context
 
-### Migration from single-course to multi-course
+_Last updated: 2026-04-30_
 
-If you have an existing setup with `course/` and `.canvas/index.json` at repo root and want to add sections:
+- **v0.5.0 just shipped** — Course Design Language as the 8th knowledge framework, with the `byui_course_design/` template-set (11 HTML components + canonical rubric JSON)
+- **v0.4.0 multi-course orchestration** in production — `tools/sync_context.sh` invokes `canvas_sync.py` per context (master/blueprint/s1/s2/...). Tested against DS 250 (master + S1 + S2 + Blueprint).
+- **Make-AI-Agents subtree** at `make_ai_agents/` is gitignored. Populate locally with the subtree-add command in Existing Tooling when needed.
+- **Open canvas_toolbox issues**: [#16](https://github.com/chaz-clark/canvas_toolbox/issues/16) (file-aware pulling + fuzzy search), [#17](https://github.com/chaz-clark/canvas_toolbox/issues/17) (orphan/broken-reference audit), [#18](https://github.com/chaz-clark/canvas_toolbox/issues/18) (alignment-chain audit). All bigger features; no current pain.
+- **Roadmap (canvas_toolbox)**: convert `canvas_course_expert` to deployable `.agents/skills/canvas-audit/` (first deployable skill, parameterize for non-BYUI institutions); capture conversion as `agents/deploy_agent.md`; convert `canvas_schedule_auditor` to validate the template; cite `toyota-way-agents` skill from AGENTS.md once it lands upstream and gets subtree'd.
+- **Upstream-tracked work** lives in [`Make-AI-Agents`](https://github.com/chaz-clark/Make-AI-Agents) (separate repo, separate issue tracker). Toyota Way × AI agents skill design + subtree consumer hygiene live there.
 
-```bash
-# Move existing single-course mirror under master/
-mkdir -p master
-mv course master/course
-mv course_src master/course_src 2>/dev/null || true
-mv .canvas master/.canvas
+Vision: another university clones this repo, opens it in any modern AI coding tool, and the canvas-audit capability is auto-discovered by their LLM — zero install friction beyond clone-and-open.
 
-# Verify nothing broke
-tools/sync_context.sh master --status
+## Domain Terms
 
-# Now add sections via .env (S1_COURSE_ID=…) and pull them
-tools/sync_context.sh s1 --pull
-```
-
-**API token**: Canvas → Account → Settings → Approved Integrations → New Access Token. Requires instructor or admin role on all courses you plan to write to.
-
-## Commands
-
-```bash
-# Source course (CANVAS_COURSE_ID)
-uv run python tools/canvas_sync.py --pull                        # Canvas → course/
-uv run python tools/canvas_sync.py --pull --quiet                # suppress per-file output
-uv run python tools/canvas_sync.py --status                      # show local changes not yet pushed
-uv run python tools/canvas_sync.py --push                        # push all changes to Canvas
-uv run python tools/canvas_sync.py --push "[module-slug]"        # push one module only
-uv run python tools/canvas_sync.py --push syllabus               # push syllabus only
-
-# Blueprint (master → BLUEPRINT_COURSE_ID)
-uv run python tools/blueprint_sync.py --pull                     # full init + build mapping
-uv run python tools/blueprint_sync.py --push                     # sync master → blueprint
-uv run python tools/blueprint_sync.py --status                   # mapping + date coverage
-
-# Master (source → MASTER_COURSE_ID)
-uv run python tools/course_mirror.py --pull                      # map master item IDs
-uv run python tools/course_mirror.py --push                      # push course/ → master
-
-# Quality check — run after every push
-uv run python tools/course_quality_check.py                      # check source course
-uv run python tools/course_quality_check.py --master             # check master
-uv run python tools/course_quality_check.py --blueprint          # check blueprint
-uv run python tools/course_quality_check.py --all                # all three → quality_report.md
-uv run python tools/course_quality_check.py --all --fix          # auto-fix duplicates
-
-# Classic quiz questions
-uv run python tools/canvas_quiz_questions.py --push <file.questions.json>   # idempotent
-uv run python tools/canvas_quiz_questions.py --list <file.questions.json>
-uv run python tools/canvas_quiz_questions.py --clear <file.questions.json>
-
-# Smoke test (no credentials needed)
-uv run python tools/canvas_api_tool.py --test
-```
-
-## Agents
-
-Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, pitfalls) and a `.json` (structured data, API patterns, mappings). Load both when invoking the agent.
-
-| Agent | Purpose |
+| Term | Definition |
 |---|---|
-| `canvas_course_expert` | Audit course content against the 8-framework instructional-design stack (CLT, Hattie, Three Domains, Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language, Toyota A3) |
-| `canvas_content_sync` | Push page/assignment content changes to Canvas |
-| `canvas_blueprint_sync` | Sync master → blueprint including dates, completion requirements, prerequisites |
-| `canvas_schedule_auditor` | Rule-based date audit — propose-before-execute, with institution-aware rules |
-| `canvas_semester_setup` | Roll due dates forward for a new semester given a Week 1 start date |
-| `canvas_new_course_setup` | First-time setup walkthrough for a new course fork |
-| `make_agent` | Template for creating new agents — separate upstream tool, gitignored, lives at `make_ai_agents/` at the repo root (sibling to `tools/` and `agents/`). Populate locally with `git subtree add --prefix=make_ai_agents https://github.com/chaz-clark/Make-AI-Agents.git main --squash`. |
-| `make_agent_qc` | Validate a new agent against `make_agent` standards (same upstream tool as above) |
+| **Master** | The template course where authoring happens. One per course. Identified by `MASTER_COURSE_ID` in `.env`. Folder: `master/` (or `course/` in legacy single-course mode). |
+| **Blueprint** | A Canvas Blueprint course that semester sections clone from. Optional — only used by online programs. Identified by `BLUEPRINT_COURSE_ID`. Folder: `blueprint/`. |
+| **Section** | A live student-facing course for a specific semester (S1, S2, S3...). Cloned from blueprint or master. Identified by `S1_COURSE_ID`, `S2_COURSE_ID`, etc. Folders: `s1/`, `s2/`, `s3/`. |
+| **Sprint module** | A weekly or bi-weekly module containing related content. Sequential by default; can have prerequisites that lock later sprints until prior items are completed. |
+| **Module item** | An entry inside a module — Page, Assignment, Quiz, Discussion, ExternalTool, ExternalUrl, or SubHeader. Has its own `module_item_id` distinct from the underlying content's `canvas_id`. |
+| **NewQuiz** | Canvas's newer quiz engine (LTI-based). Cannot be content-pushed via REST API — must be edited in Canvas UI. Distinct from Classic Quiz. |
+| **Classic Quiz** | Canvas's original quiz engine. Has both a `quiz_id` (in `/quizzes`) and an underlying `assignment_id` (in `/assignments` with `submission_types: ["online_quiz"]`). REST API works fully. |
+| **Source of truth** | The local working folder (`master/course/` in multi-course mode, `course/` in single-course). Canvas is the sync *target*. |
 
-For framework theory and the routing rules between them, see [`agents/knowledge/README.md`](agents/knowledge/README.md).
+## External System Lessons
 
-For the agent-engineering taxonomy that distinguishes runtime, capability, and specification layers — and the AI engineering practices for each — see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
+Canvas API has multiple non-obvious behaviors discovered through use. Each is a real footgun:
 
-## Sync Limitations
+| Behavior | Why it matters | How to handle |
+|---|---|---|
+| Module prerequisites silently fail with JSON payload | Returns 200 OK but doesn't actually set the prerequisite | Always use form-encoded: `data={"module[prerequisite_module_ids][]": id}` |
+| Module published state is form-encoded too | Same pattern as prerequisites | `data={"module[workflow_state]": "active"\|"unpublished"}` |
+| Semester due-date updates fail without `lock_at: null` and `unlock_at: null` | Reading quizzes retain prior-semester availability windows; sending `due_at` alone causes 400 errors | Always send all three together when rolling forward dates |
+| `late_policy` PATCH returns 403 for instructor tokens | Cannot set programmatically with most tokens | Set manually in Canvas Settings → Gradebook, or use admin token |
+| Classic quiz `points_possible` may show 0 after question push | Canvas auto-calculates from questions but doesn't update the quiz object | Explicit `PUT /quizzes/:id {"quiz": {"points_possible": N}}` after question push |
+| Classic quizzes have two IDs | Module items reference `quiz_id`; due dates use `assignment_id` | Quality check maps both to avoid false "not in module" positives |
+| Discussions use `todo_date`, not `due_at` | Different field on `PUT /discussion_topics/:id` | Don't conflate with assignment / quiz date semantics |
+| NewQuiz / ExternalTool items can't be content-pushed via REST | Module shell syncs but item body is empty in target | Sync scripts skip and warn; manage these in Canvas UI |
+| `GET /courses/:id/rubrics` requires teacher token | Returns 403 with student token | Workaround: `GET /courses/:id/assignments/:id?include[]=rubric` works for student tokens too |
+| Empty modules are a sync artifact | When all items in a module are NewQuiz / ExternalTool, the module shell syncs but lands empty | Sync scripts warn before; quality check flags after |
 
-**This is not git.** No commit history, no branching, no conflict detection.
+## Existing Tooling
 
-- Local edits → Canvas: `--status` → `--push` → `--pull --quiet`
-- Canvas-side edit → local: `--pull` (answer `y` to accept Canvas, discard local)
-- **NewQuiz/ExternalTool** items cannot be pushed via REST API — manage in Canvas UI. The sync scripts warn when a module contains only these types (the module shell syncs but lands empty).
+Before generating new sync or audit code, check whether these already do what's needed:
 
-## Critical Invariants
+| Tool | Purpose | When to use |
+|---|---|---|
+| `tools/canvas_sync.py` | Single-course mirror (pull, status, push, build, upload) | All single-course sync work |
+| `tools/sync_context.sh <context>` | Multi-course wrapper — invokes `canvas_sync.py` for master / blueprint / s1 / s2 / ... | Anytime more than one course is in this repo |
+| `tools/blueprint_sync.py` | Master → Blueprint sync (one-way overwrite, content + dates + completion requirements) | Online programs using Canvas Blueprint |
+| `tools/course_mirror.py` | Source → Master one-off mirror | Manually replicating between two courses |
+| `tools/course_quality_check.py` | Audit for duplicates, floating items, empty modules, dates outside the course window | After every push to any course |
+| `tools/canvas_quiz_questions.py` | Classic quiz question manager (push, list, clear) | Editing quiz questions outside Canvas UI |
+| `tools/canvas_api_tool.py` | Audit engine + Canvas write functions | Wrapped by audit agents; rarely invoked directly |
+| `agents/canvas_course_expert` | 8-framework instructional-design audit | Conceptual / pedagogical audit |
+| `agents/canvas_schedule_auditor` | Rule-based date audit (propose-before-execute) | Pre-semester or mid-semester date validation |
+| `agents/canvas_blueprint_sync` / `canvas_content_sync` | Agent guides for sync workflows | Reference, not invoked directly |
+| `agents/canvas_semester_setup` | Roll due dates forward for a new semester | Once per semester |
+| `agents/canvas_new_course_setup` | First-time setup walkthrough | Once per new course adoption |
 
-1. **Edit `course/` locally first.** Canvas is the sync target, not the source.
-2. **Canvas IDs are course-specific.** The same assignment has a different ID in every course and cloned section. Match content across courses by title, never by ID.
-3. **Adding content requires two steps: course + module.** An assignment/quiz/page not linked as a module item is invisible to students. Run `course_quality_check.py` after every push.
-4. **Completion requirements enable the prerequisite chain.** Every item in every locked module must have `must_submit` (assignments/quizzes) or `must_view` (pages/tools) set, or the module lock silently stops enforcing.
-5. **Confirm scope before any write.** Always verify the target course ID before pushing. Master, blueprint, and source are different courses with different IDs.
-6. **`request_confirmation()` must return `approved=true` before any Canvas write.** All audit agents enforce this for any create/update/delete operation.
+For framework theory (CLT / Hattie / etc.), see [`agents/knowledge/README.md`](agents/knowledge/README.md). For the agent abstraction taxonomy, see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
 
-## Canvas API Gotchas
-
-- **Module prerequisites**: form-encoded `data={"module[prerequisite_module_ids][]": id}` — JSON payload returns 200 but silently does nothing
-- **Module published state**: `data={"module[workflow_state]": "active"|"unpublished"}` (form-encoded)
-- **Semester due date updates**: always send `lock_at: null, unlock_at: null` alongside `due_at` — reading quizzes retain prior-semester availability windows that cause 400 errors if not cleared
-- **late_policy PATCH**: 403 for instructor tokens — set manually in Canvas Settings → Gradebook or use admin token
-- **Classic quiz points**: may show 0 after question push — fix with `PUT /quizzes/:id {"quiz": {"points_possible": N}}`
-- **Quiz IDs**: a classic quiz has both a `quiz_id` (used by module items) and an underlying `assignment_id` (used by `PUT /assignments/:id` for due dates)
-- **Discussions use a different due date field**: `todo_date` in `PUT /discussion_topics/:id`, not `due_at`
-
-## Quality Check Workflow
-
-Run after every push to any course:
+**Populating the gitignored upstream subtrees**:
 
 ```bash
-uv run python tools/course_quality_check.py --all
+# Make-AI-Agents (template generation skills: make_agent, make_AGENTS, make_gem)
+git subtree add --prefix=make_ai_agents \
+  https://github.com/chaz-clark/Make-AI-Agents.git main --squash
+
+# gh_issues_agent (separate tool, populate similarly if needed)
 ```
 
-Report categories:
-- **Auto-fixable** (`--fix`): duplicate assignment groups, assignments, quizzes, module items; orphaned duplicates
-- **Manual review**: published items not in any module, empty modules, dates outside the course window, missing course dates
-
-`quality_report.md` at repo root is the human-readable output. Per-course JSON in `.canvas/quality_report_*.json` is machine-readable for agents.
-
-## Course-Specific Notes
-
-<!-- Add per-institution notes here: module/sprint structure, grading model, competency thresholds, timezone, known Canvas quirks. Or create a personal CLAUDE.md (gitignored) and put them there. -->
-
----
-
-## Roadmap
-
-The following items are planned next for this toolkit. Snapshot of the agreed direction toward making canvas_toolbox installable as a cross-tool deployable skill across universities and AI tools.
-
-1. **Convert `canvas_course_expert` → `.agents/skills/canvas-audit/`** — first deployable skill following the [Agent Skills](https://agentskills.io/specification) standard. Parameterize for non-BYUI institutions (institution name, course ID env vars, audit framework subset). Test discovery in Antigravity, VS Code Copilot, and Claude Code.
-2. **Capture conversion pattern as `agents/deploy_agent.md`** — template for transforming a `make_agent`-produced spec into a `.agents/skills/<name>/` package. Sibling to `make_agent.md` (design-time) and `make_agent_qc.md` (validation).
-3. **Convert `canvas_schedule_auditor` using the new template** — validates `deploy_agent.md` on a different agent shape. Confirms the template generalizes.
-4. **Document per-tool quickstart in README** — "Using Claude Code? Just works. Antigravity? Just works. VS Code Copilot? Flip `chat.useAgentsMdFile: true` once. Cursor? Just works."
-5. **When `toyota-way-agents` skill lands in the upstream `Make-AI-Agents` subtree, cite it from AGENTS.md** as the recommended companion to `make_agent` for non-technical users. The skill is designed and tracked upstream (not in this repo); this item is just the canvas_toolbox side of "consume it once it's there."
-
-Vision: another university clones this repo, opens it in whatever AI coding tool they use, and the canvas-audit capability is auto-discovered by their AI — zero install friction beyond clone-and-open.
+After populating either subtree, edits flow upstream (edit at the source repo, not here). Future updates: `git subtree pull --prefix=<name> <url> main --squash`.
