@@ -47,20 +47,38 @@ agents/                              ← agent guides, configs, knowledge, templ
     toyota_gap_analysis_knowledge.md
 tools/                               ← Python CLI scripts (all use uv run python)
   canvas_sync.py                     ← source course mirror (init/status/push/pull)
+  sync_context.sh                    ← multi-course wrapper — invokes canvas_sync.py per context (master/s1/s2/blueprint)
   blueprint_sync.py                  ← master → blueprint sync
   course_mirror.py                   ← source → master one-off mirror
   course_quality_check.py            ← duplicate/date/module/floating-item auditor
   canvas_quiz_questions.py           ← classic quiz question manager
   canvas_api_tool.py                 ← audit engine + Canvas write functions
-course/                              ← live source course mirror (gitignored, source of truth)
+
+# Single-course layout (legacy — works without any wrapper):
+course/                              ← Canvas mirror (gitignored)
   syllabus.html
   _course.json
   [module-slug]/
     _module.json
     *.html / *.json                  ← pages (html) and assignment/quiz metadata (json)
     *.questions.json                 ← classic quiz questions
-blueprint_course/                    ← read-only blueprint mirror (gitignored)
-.canvas/                             ← runtime index files (all gitignored)
+.canvas/                             ← runtime index files (gitignored)
+
+# Multi-course layout (when using tools/sync_context.sh):
+master/                              ← master template working dir
+  course/                            ← Canvas mirror for the master
+  course_src/
+  .canvas/index.json
+blueprint/                           ← blueprint working dir (online programs only)
+  course/
+  .canvas/index.json
+s1/                                  ← section 1 working dir
+  course/
+  .canvas/index.json
+s2/                                  ← section 2 working dir (optional, for multi-section semesters)
+  course/
+  .canvas/index.json
+
 quality_report.md                    ← combined quality report (gitignored, regenerated on demand)
 AGENTS.md                            ← this file
 CLAUDE.md                            ← optional, gitignored — personal Claude Code notes
@@ -74,11 +92,82 @@ See `agents/canvas_new_course_setup.md` for a full walkthrough. Quick path:
 uv sync
 cp .env.example .env
 # Edit .env — add CANVAS_API_TOKEN, CANVAS_BASE_URL, CANVAS_COURSE_ID,
-#              MASTER_COURSE_ID, BLUEPRINT_COURSE_ID
+#              MASTER_COURSE_ID, BLUEPRINT_COURSE_ID, S1_COURSE_ID (if using sections)
 
 uv run python tools/canvas_sync.py --init           # pull source course into course/
 uv run python tools/blueprint_sync.py --pull        # mirror blueprint + build mapping (if using)
 uv run python tools/course_mirror.py --pull         # map master item IDs (if using)
+```
+
+## Multi-course architecture
+
+A typical course has multiple Canvas instances tied to one shared design:
+
+- **Master** (always 1) — template course where authoring happens
+- **Blueprint** (optional, online programs only) — Canvas Blueprint that semester sections clone from
+- **S1, S2, S3, ...** (per semester, typically 2–3) — live student sections
+
+`canvas_sync.py` itself is single-course — it reads `CANVAS_COURSE_ID` from `.env`, mirrors to `course/`, writes `.canvas/index.json` (all CWD-relative). The orchestration of "which course am I working on right now" lives one layer up, in [`tools/sync_context.sh`](tools/sync_context.sh).
+
+### How `sync_context.sh` works
+
+The wrapper does three things:
+
+1. Reads `.env` to find the course ID for the requested context
+2. Creates and `cd`s into a context folder (`master/`, `s1/`, etc.)
+3. Invokes `canvas_sync.py` from that folder with `CANVAS_COURSE_ID` set
+
+Because every per-course path in `canvas_sync.py` is CWD-relative, each context lands in its own isolated tree:
+
+```
+master/course/                  master/.canvas/index.json
+s1/course/                      s1/.canvas/index.json
+s2/course/                      s2/.canvas/index.json
+```
+
+Zero changes were needed to `canvas_sync.py` to support this — the script never knows it's running in a "context", and the wrapper doesn't need to understand sync internals. Clean separation.
+
+### .env mapping
+
+| Context | .env variable | Folder |
+|---|---|---|
+| `master` | `MASTER_COURSE_ID` | `master/` |
+| `blueprint` | `BLUEPRINT_COURSE_ID` | `blueprint/` |
+| `s1` | `S1_COURSE_ID` | `s1/` |
+| `s2` | `S2_COURSE_ID` | `s2/` |
+| `s3` | `S3_COURSE_ID` | `s3/` |
+
+Add additional sections by adding `S<N>_COURSE_ID` to `.env` — the wrapper resolves any `s<N>` context up to `s99`.
+
+### Usage
+
+```bash
+tools/sync_context.sh master --pull              # pull master into master/course/
+tools/sync_context.sh master --status            # status for master
+tools/sync_context.sh s1 --pull                  # pull section 1
+tools/sync_context.sh s2 --push "sprint-1"       # push one module of section 2
+tools/sync_context.sh blueprint --pull           # pull blueprint
+tools/sync_context.sh master --build             # build markdown → HTML for master
+```
+
+Single-course users without sections can keep using `tools/canvas_sync.py` directly with `course/` at repo root — the wrapper is opt-in.
+
+### Migration from single-course to multi-course
+
+If you have an existing setup with `course/` and `.canvas/index.json` at repo root and want to add sections:
+
+```bash
+# Move existing single-course mirror under master/
+mkdir -p master
+mv course master/course
+mv course_src master/course_src 2>/dev/null || true
+mv .canvas master/.canvas
+
+# Verify nothing broke
+tools/sync_context.sh master --status
+
+# Now add sections via .env (S1_COURSE_ID=…) and pull them
+tools/sync_context.sh s1 --pull
 ```
 
 **API token**: Canvas → Account → Settings → Approved Integrations → New Access Token. Requires instructor or admin role on all courses you plan to write to.
