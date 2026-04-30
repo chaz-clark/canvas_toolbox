@@ -30,12 +30,6 @@ agents/                              ← agent guides, configs, knowledge, templ
   canvas_schedule_auditor.md/.json   ← rule-based date audit agent
   canvas_semester_setup.md/.json     ← semester due date rollout agent
   canvas_new_course_setup.md         ← step-by-step guide for first-time repo setup
-  make_ai_agents/                    ← upstream subtree (gitignored — local working copy only)
-    make_agent.md/.json              ← template for creating new agents
-    make_agent_qc.md/.json           ← quality control validator for new agents
-    make_gems/                       ← upstream agent gem definitions
-    source_docs/                     ← upstream source documents
-    update_agents/                   ← upstream agent update workflows
   knowledge/                         ← instructional-design references (see knowledge/README.md)
     README.md                        ← routing guide — which framework for which audit question
     cognitive_load_theory_knowledge.md
@@ -49,6 +43,9 @@ agents/                              ← agent guides, configs, knowledge, templ
   templates/                         ← reusable HTML/JSON artifacts (see templates/README.md)
     README.md                        ← pattern guide — when to use templates vs knowledge files
     byui_course_design/              ← 11 HTML components + canonical rubric JSON for BYUI courses
+make_ai_agents/                      ← upstream subtree from chaz-clark/Make-AI-Agents — separate tool, gitignored, local working copy only. Populate with: git subtree add --prefix=make_ai_agents https://github.com/chaz-clark/Make-AI-Agents.git main --squash
+gh_issues_agent/                     ← upstream subtree from chaz-clark/gh_issues_agent — separate tool, gitignored, local working copy only
+
 tools/                               ← Python CLI scripts (all use uv run python)
   canvas_sync.py                     ← source course mirror (init/status/push/pull)
   sync_context.sh                    ← multi-course wrapper — invokes canvas_sync.py per context (master/s1/s2/blueprint)
@@ -224,8 +221,8 @@ Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, 
 | `canvas_schedule_auditor` | Rule-based date audit — propose-before-execute, with institution-aware rules |
 | `canvas_semester_setup` | Roll due dates forward for a new semester given a Week 1 start date |
 | `canvas_new_course_setup` | First-time setup walkthrough for a new course fork |
-| `make_agent` | Template for creating new agents — gitignored upstream subtree from [`Make-AI-Agents`](https://github.com/chaz-clark/Make-AI-Agents). Populate locally with `git subtree add --prefix=agents/make_ai_agents https://github.com/chaz-clark/Make-AI-Agents.git main --squash`. |
-| `make_agent_qc` | Validate a new agent against `make_agent` standards (same upstream as above) |
+| `make_agent` | Template for creating new agents — separate upstream tool, gitignored, lives at `make_ai_agents/` at the repo root (sibling to `tools/` and `agents/`). Populate locally with `git subtree add --prefix=make_ai_agents https://github.com/chaz-clark/Make-AI-Agents.git main --squash`. |
+| `make_agent_qc` | Validate a new agent against `make_agent` standards (same upstream tool as above) |
 
 For framework theory and the routing rules between them, see [`agents/knowledge/README.md`](agents/knowledge/README.md).
 

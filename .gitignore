@@ -26,10 +26,11 @@ CLAUDE.md
 gh_issues_agent/
 
 # Make-AI-Agents is an upstream subtree — do not commit changes here.
-# Local working copy lives at agents/make_ai_agents/ for reference and
-# templates; canonical source is https://github.com/chaz-clark/Make-AI-Agents.
+# Local working copy lives at make_ai_agents/ at the repo root (sibling to
+# tools/, agents/, etc.) for reference and templates; canonical source is
+# https://github.com/chaz-clark/Make-AI-Agents.
 # Make edits locally and push upstream via git subtree push.
-agents/make_ai_agents/
+make_ai_agents/
 
 # Quality reports — generated output
 quality_report.md
