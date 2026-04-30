@@ -39,8 +39,8 @@ canvas_toolbox/
 ├── tests/                 ← regression tests (pytest)
 ├── course_ref/            ← local-only artifacts safe from --pull (answer keys, drafts, setup notes)
 ├── course_src/            ← markdown authoring workspace (gitignored, --build compiles to course/)
-├── make_ai_agents/        ← upstream subtree (gitignored, separate tool)
-├── gh_issues_agent/       ← upstream subtree (gitignored, separate tool)
+├── make_ai_agents/        ← local clone of upstream tool (gitignored, separate dev tool)
+├── gh_issues_agent/       ← local clone of upstream tool (gitignored, separate dev tool)
 ├── master/                ← master course working dir (gitignored, multi-course mode)
 ├── s1/, s2/, s3/          ← per-section working dirs (gitignored)
 ├── course/                ← legacy single-course mirror (gitignored)
@@ -132,14 +132,14 @@ Before generating new sync or audit code, check whether these already do what's 
 
 For framework theory (CLT / Hattie / etc.), see [`agents/knowledge/README.md`](agents/knowledge/README.md). For the agent abstraction taxonomy, see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
 
-**Populating the gitignored upstream subtrees**:
+**Populating the gitignored upstream tool clones** (each is a normal local git clone — independent of canvas_toolbox's git history):
 
 ```bash
 # Make-AI-Agents (template generation skills: make_agent, make_AGENTS, make_gem)
-git subtree add --prefix=make_ai_agents \
-  https://github.com/chaz-clark/Make-AI-Agents.git main --squash
+git clone https://github.com/chaz-clark/Make-AI-Agents.git make_ai_agents
 
-# gh_issues_agent (separate tool, populate similarly if needed)
+# gh_issues_agent (GitHub issue triage tool)
+git clone https://github.com/chaz-clark/gh_issues_agent.git
 ```
 
-After populating either subtree, edits flow upstream (edit at the source repo, not here). Future updates: `git subtree pull --prefix=<name> <url> main --squash`.
+Each is a real git clone with its own `.git/` directory. Edits flow upstream (edit at the source repo's local clone, not here). Future updates: `cd <dir> && git pull origin main`.
