@@ -73,7 +73,7 @@ For the full principles and override rules, see `knowledge/behavioral_discipline
 _Last updated: 2026-04-30_
 
 - **v0.5.0 just shipped** — Course Design Language as the 8th knowledge framework, with the `byui_course_design/` template-set (11 HTML components + canonical rubric JSON)
-- **v0.4.0 multi-course orchestration** in production — `tools/sync_context.sh` invokes `canvas_sync.py` per context (master/blueprint/s1/s2/...). Tested against DS 250 (master + S1 + S2 + Blueprint).
+- **v0.4.0 multi-course orchestration** in production — `tools/sync_context.sh` invokes `canvas_sync.py` per context (master/blueprint/s1/s2/...). Validated against a real multi-section course setup.
 - **Make-AI-Agents subtree** at `make_ai_agents/` is gitignored. Populate locally with the subtree-add command in Existing Tooling when needed.
 - **Open canvas_toolbox issues**: [#16](https://github.com/chaz-clark/canvas_toolbox/issues/16) (file-aware pulling + fuzzy search), [#17](https://github.com/chaz-clark/canvas_toolbox/issues/17) (orphan/broken-reference audit), [#18](https://github.com/chaz-clark/canvas_toolbox/issues/18) (alignment-chain audit). All bigger features; no current pain.
 - **Roadmap (canvas_toolbox)**: convert `canvas_course_expert` to deployable `.agents/skills/canvas-audit/` (first deployable skill, parameterize for non-BYUI institutions); capture conversion as `agents/deploy_agent.md`; convert `canvas_schedule_auditor` to validate the template; cite `toyota-way-agents` skill from AGENTS.md once it lands upstream and gets subtree'd.
