@@ -164,6 +164,8 @@ Five-stage backward design: **Outcome → Evidence → Experience → Content �
 
 The five tag dimensions combine for a full diagnosis: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains / Taxonomy Explorer), delivered in *which sequence* (Experiential), built in *which mode* (Designer Thinking).
 
+Two additional dimensions are reserved for the forthcoming Course Design Language framework (issue #15): `design_coherence` ∈ `{architected, partial, assembled}` and `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}`. These are paired (two-axis): coherence describes *how well* a principle is satisfied, principle says *which* one. They become active once `course_design_language_knowledge.md` ships.
+
 ---
 
 ## Toyota Gap Analysis

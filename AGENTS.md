@@ -45,6 +45,9 @@ agents/                              ← agent guides, configs, knowledge, templ
     experiential_learning_knowledge.md
     designer_thinking_knowledge.md
     toyota_gap_analysis_knowledge.md
+  templates/                         ← reusable HTML/JSON artifacts (see templates/README.md)
+    README.md                        ← pattern guide — when to use templates vs knowledge files
+    [framework]/                     ← one subdirectory per template-set (e.g., byui_course_design/)
 tools/                               ← Python CLI scripts (all use uv run python)
   canvas_sync.py                     ← source course mirror (init/status/push/pull)
   sync_context.sh                    ← multi-course wrapper — invokes canvas_sync.py per context (master/s1/s2/blueprint)

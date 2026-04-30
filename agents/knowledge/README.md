@@ -93,7 +93,7 @@ The seven files cover overlapping but distinct ground. Quick routing:
 
 ## Tag stack — full audit output
 
-A well-formed audit issue carries up to five tags so the reader can route it cleanly:
+A well-formed audit issue carries up to seven tag dimensions so the reader can route it cleanly:
 
 | Tag | From file |
 |---|---|
@@ -103,6 +103,10 @@ A well-formed audit issue carries up to five tags so the reader can route it cle
 | `taxonomy_source` | `taxonomy_explorer_knowledge.md` (only when BYUI-tool framing was used) |
 | `sequencing` | `experiential_learning_knowledge.md` |
 | `design_mode` | `designer_thinking_knowledge.md` |
+| `design_coherence` | `course_design_language_knowledge.md` *(forthcoming — issue #15)* |
+| `design_principle` | `course_design_language_knowledge.md` *(forthcoming — issue #15)* |
+
+The last two are paired (two-axis): `design_coherence` ∈ `{architected, partial, assembled}` describes *how well* a principle is satisfied; `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}` says *which principle* the finding is about.
 
 The Toyota A3 structure wraps the issue itself.
 

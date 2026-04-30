@@ -347,6 +347,8 @@
         "taxonomy_source": "Optional. byui_explorer | wilson | agnostic. Use byui_explorer when CANVAS_BASE_URL is BYUI and instructor opted into the BYUI tool framing.",
         "sequencing": "Optional (Experiential). experience_first | explanation_first | not_applicable.",
         "design_mode": "Optional (Designer Thinking). teacher | designer.",
+        "design_coherence": "Optional (Course Design Language — forthcoming, issue #15). architected | partial | assembled. Describes how well a design principle is satisfied across the course.",
+        "design_principle": "Optional (Course Design Language — forthcoming, issue #15). visual_grammar | narrative_metaphor | dual_framing | structural_beats | observable_rubrics | alignment_traceability. Names which design principle the finding is about. Pair with design_coherence for a two-axis classification.",
         "threshold": "Optional. Numeric threshold the rule compares against."
       }
     },
