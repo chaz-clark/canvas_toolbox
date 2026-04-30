@@ -1,0 +1,18 @@
+<div class="table-wrap" style="overflow-x: auto; margin-top: 20px;">
+  <table style="width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden;">
+    <thead>
+      <tr>
+        <th style="width: 30%; background-color: #006a79; color: white; padding: 15px; text-align: left; font-size: 0.85rem;" scope="col">Session</th>
+        <th style="background-color: #006a79; color: white; padding: 15px; text-align: left; font-size: 0.85rem;" scope="col">Topic &amp; Focus</th>
+      </tr>
+    </thead>
+    <tbody>
+      {{#sessions}}
+      <tr{{#alt}} style="background-color: #f9f9f9;"{{/alt}}>
+        <td style="padding: 15px; border-bottom: 1px solid #eee;"><strong>Class Session {{n}}</strong></td>
+        <td style="padding: 15px; border-bottom: 1px solid #eee;">{{focus}}</td>
+      </tr>
+      {{/sessions}}
+    </tbody>
+  </table>
+</div>

@@ -1,0 +1,9 @@
+<div class="card card-red" style="flex: 1; min-width: 300px; background-color: #fbfbfb; padding: 25px; border-radius: 8px; border: 1px solid #eee; border-top: 6px solid #EE5655;">
+  <h4 style="color: #ee5655; margin-top: 0; font-size: 1.1rem; display: flex; align-items: center; gap: 12px; font-family: 'Open Sans', sans-serif;">
+    <img style="width: 32px; height: 32px;" src="https://raw.githubusercontent.com/google/material-design-icons/master/png/action/chrome_reader_mode/materialicons/24dp/2x/baseline_chrome_reader_mode_black_24dp.png" alt="" loading="lazy">
+    Readings &amp; Resources
+  </h4>
+  <ul style="line-height: 1.6; margin-top: 10px; font-size: 0.95rem;">
+    {{#items}}<li><strong><a href="{{url}}" target="_blank">{{title}}</a>:</strong> {{annotation}}</li>{{/items}}
+  </ul>
+</div>

@@ -44,10 +44,11 @@ agents/                              ← agent guides, configs, knowledge, templ
     taxonomy_explorer_knowledge.md
     experiential_learning_knowledge.md
     designer_thinking_knowledge.md
+    course_design_language_knowledge.md
     toyota_gap_analysis_knowledge.md
   templates/                         ← reusable HTML/JSON artifacts (see templates/README.md)
     README.md                        ← pattern guide — when to use templates vs knowledge files
-    [framework]/                     ← one subdirectory per template-set (e.g., byui_course_design/)
+    byui_course_design/              ← 11 HTML components + canonical rubric JSON for BYUI courses
 tools/                               ← Python CLI scripts (all use uv run python)
   canvas_sync.py                     ← source course mirror (init/status/push/pull)
   sync_context.sh                    ← multi-course wrapper — invokes canvas_sync.py per context (master/s1/s2/blueprint)
@@ -217,7 +218,7 @@ Each agent in `agents/` is a pair of files: a `.md` guide (mission, principles, 
 
 | Agent | Purpose |
 |---|---|
-| `canvas_course_expert` | Audit course content against the 7-framework instructional-design stack (CLT, Hattie, Three Domains, Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota A3) |
+| `canvas_course_expert` | Audit course content against the 8-framework instructional-design stack (CLT, Hattie, Three Domains, Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language, Toyota A3) |
 | `canvas_content_sync` | Push page/assignment content changes to Canvas |
 | `canvas_blueprint_sync` | Sync master → blueprint including dates, completion requirements, prerequisites |
 | `canvas_schedule_auditor` | Rule-based date audit — propose-before-execute, with institution-aware rules |

@@ -1,0 +1,38 @@
+{
+  "rubric": [
+    {
+      "id": "_criterion_id",
+      "description": "Course Map Alignment",
+      "long_description": "",
+      "points": 3.0,
+      "criterion_use_range": false,
+      "ratings": [
+        {
+          "id": "_rating_id",
+          "description": "Meets Expectations",
+          "long_description": "Completes a course map that shows how course outcomes connect to module outcomes, assessments, activities, and instructional materials. The relationships among these elements are present and usable for planning the course.",
+          "points": 3.0
+        },
+        {
+          "id": "_rating_id",
+          "description": "Developing",
+          "long_description": "Completes a course map, but some connections among outcomes, assessments, activities, or materials are missing, partial, or uneven.",
+          "points": 2.0
+        },
+        {
+          "id": "_rating_id",
+          "description": "Does Not Yet Meet Expectations",
+          "long_description": "Provides an incomplete course map or does not show usable connections among outcomes, assessments, activities, and materials.",
+          "points": 0.0
+        }
+      ]
+    }
+  ],
+  "rubric_settings": {
+    "title": "{{assignment_title}}",
+    "points_possible": 10.0,
+    "free_form_criterion_comments": false,
+    "hide_score_total": false,
+    "hide_points": false
+  }
+}

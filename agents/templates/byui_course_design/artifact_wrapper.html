@@ -1,0 +1,18 @@
+<div class="byui-container" style="border: 1px solid #e0e0e0; border-radius: 0 0 10px 10px; overflow: hidden; margin-top: 0;">
+  <div style="width: 100%; line-height: 0; background-color: {{primary_hex}};">
+    <img style="width: 100%; height: auto; display: block;" role="presentation"
+         src="{{banner_image_url}}" alt="{{course_name}} Banner" loading="lazy">
+  </div>
+  <header class="banner-title-area" style="background-color: #ffffff; padding: 30px 40px 10px 40px; border-bottom: 1px solid #eee;">
+    <div style="display: flex; flex-direction: column; gap: 8px;">
+      <span style="display: inline-block; background-color: {{primary_hex}}; color: #ffffff; padding: 4px 12px; font-size: 0.75rem; width: fit-content; border-radius: 4px;"> {{role_chip}} </span>
+      <h1 style="margin: 0; font-family: 'Open Sans', Arial, sans-serif; font-size: 2.2rem; color: {{primary_hex}}; line-height: 1.1;">{{title}}</h1>
+      {{#subtitle}}
+      <p style="margin: 5px 0 0 0; color: #666; font-size: 1.1rem; border-left: 3px solid #DB9888; padding-left: 15px; font-style: italic;">{{subtitle}}</p>
+      {{/subtitle}}
+    </div>
+  </header>
+  <div class="main-content" style="padding: 40px; background-color: #ffffff;">
+    {{body}}
+  </div>
+</div>

@@ -17,6 +17,7 @@ The seven files cover overlapping but distinct ground. Quick routing:
 | Whether the course covers more than just thinking (cognitive vs. affective vs. psychomotor) | [`three_domains_knowledge.md`](three_domains_knowledge.md) *(academic framing)* or [`taxonomy_explorer_knowledge.md`](taxonomy_explorer_knowledge.md) *(BYUI tool framing)* |
 | Whether the module sequence is brain-aligned (experience before explanation) | [`experiential_learning_knowledge.md`](experiential_learning_knowledge.md) |
 | Whether the course was built backward from outcomes (vs. forward from content) | [`designer_thinking_knowledge.md`](designer_thinking_knowledge.md) |
+| Whether a BYUI course is a coherent artifact (visual grammar, rubrics, alignment) | [`course_design_language_knowledge.md`](course_design_language_knowledge.md) |
 | Writing a precise change plan for a flagged issue | [`toyota_gap_analysis_knowledge.md`](toyota_gap_analysis_knowledge.md) |
 
 ---
@@ -82,6 +83,16 @@ The seven files cover overlapping but distinct ground. Quick routing:
 
 ---
 
+### [`course_design_language_knowledge.md`](course_design_language_knowledge.md)
+
+**Source:** BYU-Idaho *Architects of Learning* faculty-development course (course `405800`).
+**Core idea:** Six prescriptive principles for course coherence at the artifact level: visual grammar, sustained narrative metaphor, dual-framing, consistent structural beats, observable rubrics (3-level scale with `long_description` on every rating), and alignment traceability (Course Outcome → Module Outcome → Assessment → Rubric Criterion → Activity).
+**When to use:** When auditing a BYUI course and the underlying theory (Hattie / CLT / domain coverage) all check out but the course still feels incoherent — that's the design language layer. **BYUI institutional view**; other universities can fork the principles structure and swap the palette/templates.
+**Audit tag:** Two paired tags — `design_coherence` ∈ {architected, partial, assembled} (how well a principle is satisfied) + `design_principle` ∈ {visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability} (which principle).
+**Pairs with:** [`agents/templates/byui_course_design/`](../templates/byui_course_design/) (the 11 HTML components and 1 rubric JSON shape that implement the recipe).
+
+---
+
 ### [`toyota_gap_analysis_knowledge.md`](toyota_gap_analysis_knowledge.md)
 
 **Source:** Toyota Production System / A3 Problem Solving methodology.
@@ -103,8 +114,8 @@ A well-formed audit issue carries up to seven tag dimensions so the reader can r
 | `taxonomy_source` | `taxonomy_explorer_knowledge.md` (only when BYUI-tool framing was used) |
 | `sequencing` | `experiential_learning_knowledge.md` |
 | `design_mode` | `designer_thinking_knowledge.md` |
-| `design_coherence` | `course_design_language_knowledge.md` *(forthcoming — issue #15)* |
-| `design_principle` | `course_design_language_knowledge.md` *(forthcoming — issue #15)* |
+| `design_coherence` | `course_design_language_knowledge.md` |
+| `design_principle` | `course_design_language_knowledge.md` |
 
 The last two are paired (two-axis): `design_coherence` ∈ `{architected, partial, assembled}` describes *how well* a principle is satisfied; `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}` says *which principle* the finding is about.
 

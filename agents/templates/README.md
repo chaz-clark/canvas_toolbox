@@ -54,4 +54,6 @@ Don't inline the template body in the knowledge file. The reference is the contr
 
 ## Currently active template-sets
 
-*None yet.* The first template-set will be `byui_course_design/` once the Course Design Language knowledge file ships ([issue #15](https://github.com/chaz-clark/canvas_toolbox/issues/15)). Tracked there for the 11 HTML components in the original draft (banner wrapper, Core Questions callout, Purpose/Overview two-panel, etc.).
+| Set | Used by | Contents |
+|---|---|---|
+| [`byui_course_design/`](byui_course_design/) | [`agents/knowledge/course_design_language_knowledge.md`](../knowledge/course_design_language_knowledge.md) | 11 HTML component templates (banner wrapper, Core Questions callout, section header, Purpose+Outcome pair, red Readings card, tan Architect's Lens card, Weekly Schedule table, assignment Purpose+Overview, Instructions+Parts, Submission Criteria, Architect's Reflection closing card) + 1 canonical 3-level rubric JSON shape |

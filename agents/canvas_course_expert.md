@@ -10,7 +10,7 @@
 
 ## Mission
 
-**What it does**: Analyzes Canvas courses against a seven-framework instructional-design stack — Cognitive Load Theory, Hattie's 3-Phase Learning Model, Three Domains of Learning, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, and Toyota Gap Analysis — then proposes specific improvements and applies approved changes to the live course via the Canvas API. Each framework lives in a self-contained reference under [`knowledge/`](knowledge/README.md); the agent emits up to five audit tag dimensions per issue (`hattie_phase`, `cognitive_load_type`, `learning_domain`, `sequencing`, `design_mode`) plus the Toyota A3 wrapper.
+**What it does**: Analyzes Canvas courses against an eight-framework instructional-design stack — Cognitive Load Theory, Hattie's 3-Phase Learning Model, Three Domains of Learning, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language (BYUI institutional view), and Toyota Gap Analysis — then proposes specific improvements and applies approved changes to the live course via the Canvas API. Each framework lives in a self-contained reference under [`knowledge/`](knowledge/README.md); the agent emits up to seven audit tag dimensions per issue (`hattie_phase`, `cognitive_load_type`, `learning_domain`, `sequencing`, `design_mode`, `design_coherence`, `design_principle`) plus the Toyota A3 wrapper.
 
 **Why it exists**: Instructors spend hours manually reviewing Canvas course structure and cross-referencing BYUI design standards. Courses frequently suffer from module bloat, inconsistent naming, buried instructions, and navigation friction — all of which increase student cognitive load and block progression through Hattie's learning phases. This agent automates the audit, surfaces gaps with root causes, and makes applying fixes safe, reviewable, and fast.
 
@@ -160,11 +160,23 @@ Five-stage backward design: **Outcome → Evidence → Experience → Content �
 
 ---
 
+## Course Design Language (BYUI Institutional View)
+
+> Full reference: [`knowledge/course_design_language_knowledge.md`](knowledge/course_design_language_knowledge.md)
+
+The visual / structural / rubric / alignment layer that sits *above* learning theory and *below* content. Six prescriptive principles for what a coherent BYUI Canvas course looks like at the artifact level: **Unified Visual Grammar**, **Sustained Narrative Metaphor**, **Dual-Framing on Every Task**, **Consistent Structural Beats**, **Observable Rubrics** (3-level scale with `long_description` on every rating), and **Alignment Traceability** (Course Outcome → Module Outcome → Assessment → Rubric Criterion → Activity).
+
+Each audit issue gains two paired fields: `design_coherence` ∈ `{architected, partial, assembled}` (how well a principle is satisfied across the course) and `design_principle` ∈ one of the six (which principle the finding is about). Implementation templates live in [`agents/templates/byui_course_design/`](templates/byui_course_design/) — 11 HTML components plus a canonical rubric JSON shape.
+
+This is the **BYUI institutional view**. Other universities adopting the toolkit can fork the principles structure and swap palette / templates / role-chip labels for their own brand.
+
+---
+
 ## Tag stack — what every audit issue can carry
 
-The five tag dimensions combine for a full diagnosis: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains / Taxonomy Explorer), delivered in *which sequence* (Experiential), built in *which mode* (Designer Thinking).
+The seven tag dimensions combine for a full diagnosis: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains / Taxonomy Explorer), delivered in *which sequence* (Experiential), built in *which mode* (Designer Thinking), with *what design coherence* of *which BYUI design principle* (Course Design Language).
 
-Two additional dimensions are reserved for the forthcoming Course Design Language framework (issue #15): `design_coherence` ∈ `{architected, partial, assembled}` and `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}`. These are paired (two-axis): coherence describes *how well* a principle is satisfied, principle says *which* one. They become active once `course_design_language_knowledge.md` ships.
+The Course Design Language tags are paired (two-axis): `design_coherence` ∈ `{architected, partial, assembled}` describes *how well* a principle is satisfied; `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}` names *which* of the six principles the finding is about. See [`knowledge/course_design_language_knowledge.md`](knowledge/course_design_language_knowledge.md).
 
 ---
 
@@ -460,8 +472,8 @@ See `canvas_course_expert.json` → `validation.test_cases` for:
 | **Purpose** | Audit Canvas courses against cognitive load theory, Hattie's 3-phase model, and BYUI standards; apply fixes via Toyota gap analysis |
 | **Input** | `course/` folder (from `canvas_sync.py --init`) + Canvas API credentials |
 | **Output** | Gap analysis change plan (A3 format) + applied course changes |
-| **Audit Frameworks** | Cognitive Load Theory · Hattie 3-Phase · Three Domains of Learning · BYUI Taxonomy Explorer · Experiential Learning · Designer Thinking · Toyota A3 Gap Analysis |
-| **Audit Tags Emitted** | `hattie_phase` · `cognitive_load_type` · `learning_domain` · `taxonomy_source` · `sequencing` · `design_mode` |
+| **Audit Frameworks** | Cognitive Load Theory · Hattie 3-Phase · Three Domains of Learning · BYUI Taxonomy Explorer · Experiential Learning · Designer Thinking · Course Design Language · Toyota A3 Gap Analysis |
+| **Audit Tags Emitted** | `hattie_phase` · `cognitive_load_type` · `learning_domain` · `taxonomy_source` · `sequencing` · `design_mode` · `design_coherence` · `design_principle` |
 | **Agent Type** | `llm_agent` |
 | **Complexity** | complex |
 | **Key Files** | `canvas_course_expert.json`, `canvas_api_tool.py` |
