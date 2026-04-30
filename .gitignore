@@ -31,6 +31,12 @@ gh_issues_agent/
 # Update with:   cd make_ai_agents && git pull origin main
 make_ai_agents/
 
+# handoff — local clone of upstream tool used during development.
+# Note: distinct from `handoffs/` (plural) which is local-only handoff scratch.
+# Populate with: git clone https://github.com/chaz-clark/handoff.git
+# Update with:   cd handoff && git pull origin main
+handoff/
+
 # Quality reports — generated output
 quality_report.md
 

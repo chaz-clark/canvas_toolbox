@@ -41,6 +41,7 @@ canvas_toolbox/
 ├── course_src/            ← markdown authoring workspace (gitignored, --build compiles to course/)
 ├── make_ai_agents/        ← local clone of upstream tool (gitignored, separate dev tool)
 ├── gh_issues_agent/       ← local clone of upstream tool (gitignored, separate dev tool)
+├── handoff/               ← local clone of upstream tool (gitignored, separate dev tool)
 ├── master/                ← master course working dir (gitignored, multi-course mode)
 ├── s1/, s2/, s3/          ← per-section working dirs (gitignored)
 ├── course/                ← legacy single-course mirror (gitignored)
@@ -140,6 +141,9 @@ git clone https://github.com/chaz-clark/Make-AI-Agents.git make_ai_agents
 
 # gh_issues_agent (GitHub issue triage tool)
 git clone https://github.com/chaz-clark/gh_issues_agent.git
+
+# handoff (agent-to-agent handoff tool)
+git clone https://github.com/chaz-clark/handoff.git
 ```
 
 Each is a real git clone with its own `.git/` directory. Edits flow upstream (edit at the source repo's local clone, not here). Future updates: `cd <dir> && git pull origin main`.
