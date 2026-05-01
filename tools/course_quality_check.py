@@ -398,6 +398,284 @@ def _print_report(report: dict, label: str):
             print(f"      → {it['action']}")
 
 
+# ---------------------------------------------------------------------------
+# Alignment-chain audit (issue #18, read-only)
+# ---------------------------------------------------------------------------
+
+_ALIGNMENT_STOPWORDS = {
+    "the", "a", "an", "and", "or", "but", "of", "to", "in", "for", "on", "with", "by",
+    "is", "are", "be", "will", "shall", "can", "may", "should", "would", "could",
+    "this", "that", "these", "those", "it", "its", "as", "at", "from", "into",
+    "students", "student", "you", "your", "their", "they", "them", "we", "our", "us",
+    "have", "has", "had", "do", "does", "did", "been", "being", "having",
+    "course", "module", "week", "weekly", "assignment", "outcome", "outcomes", "objective", "objectives",
+    "able", "demonstrate", "complete", "completed", "show", "include", "includes",
+}
+
+
+def _alignment_tokens(text: str) -> set:
+    """Tokenize for alignment matching: lowercase, strip punctuation, drop short/stop words."""
+    if not text:
+        return set()
+    # Strip HTML tags first
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = text.lower()
+    # Replace punctuation with spaces
+    text = re.sub(r"[^a-z0-9\s]", " ", text)
+    tokens = {t for t in text.split() if len(t) >= 4 and t not in _ALIGNMENT_STOPWORDS}
+    return tokens
+
+
+def _extract_outcomes_from_html(html: str) -> list:
+    """Heuristic: find an Outcomes/Objectives section, return its list items as outcome strings.
+
+    Looks for a heading containing 'outcome' or 'objective' and extracts the next <ul>/<ol>
+    block. Falls back to numbered-paragraph patterns if no list is found.
+    """
+    if not html:
+        return []
+    outcomes: list = []
+
+    # Pattern: header containing "outcomes" or "objectives", followed by list items
+    # Match <h\d>...outcomes...</h\d>...<ul/ol>...</ul/ol>
+    section_pattern = re.compile(
+        r"<h[1-6][^>]*>[^<]*(?:outcome|objective|goal)s?[^<]*</h[1-6]>(.*?)(?=<h[1-6]|$)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    for m in section_pattern.finditer(html):
+        section = m.group(1)
+        # Extract <li> items
+        for li in re.findall(r"<li[^>]*>(.*?)</li>", section, re.IGNORECASE | re.DOTALL):
+            text = re.sub(r"<[^>]+>", " ", li).strip()
+            text = re.sub(r"\s+", " ", text)
+            if text and len(text) >= 10:
+                outcomes.append(text)
+        # Or numbered paragraphs like "<p>1. Students will..."
+        if not outcomes:
+            for p in re.findall(r"<p[^>]*>\s*\d+[\.\)]\s*(.*?)</p>", section, re.IGNORECASE | re.DOTALL):
+                text = re.sub(r"<[^>]+>", " ", p).strip()
+                text = re.sub(r"\s+", " ", text)
+                if text and len(text) >= 10:
+                    outcomes.append(text)
+
+    return outcomes
+
+
+def _audit_alignment(course_id: str, label: str = "") -> dict:
+    """Alignment-chain audit (issue #18, read-only).
+
+    Walks the chain: Course Outcome → Module Outcome → Rubric Criterion → Activity.
+    Flags breaks at each link. Heuristic text-based matching — false positives
+    expected; treat as a starting point for instructor review.
+
+    Returns:
+      summary: counts of outcomes / criteria / breaks
+      course_outcomes: extracted from syllabus.html with token sets
+      module_outcomes: per-module extracted outcomes
+      rubric_criteria: per-assignment rubric criteria
+      breaks:
+        course_outcomes_no_rubric: course outcomes with no matching rubric criterion
+        rubric_criteria_no_outcome: criteria with no matching upstream outcome
+        module_outcomes_no_rubric: module outcomes with no matching rubric criterion
+    """
+    course_outcomes_text: list = []
+    module_outcomes_text: list = []  # [{module_slug, outcome_text}]
+    rubric_criteria: list = []  # [{assignment_id, assignment_name, criterion_description, criterion_long_description}]
+
+    # 1. Course outcomes from local syllabus.html (or fall back to API)
+    syllabus_path = Path("course/syllabus.html")
+    if syllabus_path.exists():
+        syllabus_html = syllabus_path.read_text(encoding="utf-8")
+        course_outcomes_text = _extract_outcomes_from_html(syllabus_html)
+    else:
+        # Fall back: fetch syllabus body via API
+        course_meta = _get_all(f"{CANVAS_BASE_URL}/api/v1/courses/{course_id}",
+                               params={"include[]": "syllabus_body"})
+        body = ""
+        if isinstance(course_meta, list) and course_meta:
+            body = course_meta[0].get("syllabus_body", "")
+        elif isinstance(course_meta, dict):
+            body = course_meta.get("syllabus_body", "")
+        course_outcomes_text = _extract_outcomes_from_html(body)
+
+    # 2. Module outcomes from each module's overview page (heuristic — first .html in each module dir)
+    course_dir = Path("course")
+    if course_dir.exists():
+        for module_dir in sorted(course_dir.iterdir()):
+            if not module_dir.is_dir():
+                continue
+            slug = module_dir.name
+            # Look for an overview-like file: contains "overview" or "intro" in name
+            overview_files = sorted(module_dir.glob("*overview*.html")) + sorted(module_dir.glob("*intro*.html"))
+            if not overview_files:
+                # Fall back to the first .html file in the module
+                html_files = sorted(module_dir.glob("*.html"))
+                overview_files = html_files[:1]
+            for f in overview_files:
+                try:
+                    html = f.read_text(encoding="utf-8")
+                    for outcome in _extract_outcomes_from_html(html):
+                        module_outcomes_text.append({"module_slug": slug, "source": str(f), "outcome": outcome})
+                except Exception:
+                    pass
+
+    # 3. Rubric criteria — fetch each assignment with include[]=rubric
+    assignments = _get_all(f"{CANVAS_BASE_URL}/api/v1/courses/{course_id}/assignments",
+                           params={"per_page": 100, "include[]": "rubric"})
+    for a in assignments:
+        rubric = a.get("rubric") or []
+        for criterion in rubric:
+            rubric_criteria.append({
+                "assignment_id": a.get("id"),
+                "assignment_name": a.get("name"),
+                "criterion_description": criterion.get("description", ""),
+                "criterion_long_description": criterion.get("long_description", ""),
+            })
+
+    # 4. Compute token overlaps
+    co_tokens = [(t, _alignment_tokens(t)) for t in course_outcomes_text]
+    mo_tokens = [(m, _alignment_tokens(m["outcome"])) for m in module_outcomes_text]
+    rc_tokens = [(c, _alignment_tokens(c["criterion_description"] + " " + (c.get("criterion_long_description") or ""))) for c in rubric_criteria]
+
+    def _overlaps(toks_a: set, toks_b: set, threshold: int = 2) -> bool:
+        return len(toks_a & toks_b) >= threshold
+
+    # 5. Find breaks
+    course_outcomes_no_rubric = []
+    for outcome_text, toks in co_tokens:
+        matches = [c.get("criterion_description") for c, ctoks in rc_tokens if _overlaps(toks, ctoks)]
+        if not matches:
+            course_outcomes_no_rubric.append({"outcome": outcome_text, "matched_criteria": []})
+
+    rubric_criteria_no_outcome = []
+    for criterion, ctoks in rc_tokens:
+        matched_co = [t for t, ttoks in co_tokens if _overlaps(ctoks, ttoks)]
+        matched_mo = [m["outcome"] for m, mtoks in mo_tokens if _overlaps(ctoks, mtoks)]
+        if not matched_co and not matched_mo:
+            rubric_criteria_no_outcome.append({
+                "assignment_name": criterion.get("assignment_name"),
+                "criterion_description": criterion.get("criterion_description"),
+            })
+
+    module_outcomes_no_rubric = []
+    for m, toks in mo_tokens:
+        matched = [c.get("criterion_description") for c, ctoks in rc_tokens if _overlaps(toks, ctoks)]
+        if not matched:
+            module_outcomes_no_rubric.append({"module_slug": m["module_slug"], "outcome": m["outcome"]})
+
+    summary = {
+        "course_id": course_id,
+        "label": label,
+        "course_outcomes_count": len(course_outcomes_text),
+        "module_outcomes_count": len(module_outcomes_text),
+        "rubric_criteria_count": len(rubric_criteria),
+        "assignments_with_rubric": sum(1 for a in assignments if a.get("rubric")),
+        "assignments_without_rubric": sum(1 for a in assignments if not a.get("rubric")),
+        "breaks": {
+            "course_outcomes_no_rubric": len(course_outcomes_no_rubric),
+            "rubric_criteria_no_outcome": len(rubric_criteria_no_outcome),
+            "module_outcomes_no_rubric": len(module_outcomes_no_rubric),
+        },
+    }
+
+    return {
+        "summary": summary,
+        "course_outcomes": course_outcomes_text,
+        "module_outcomes": module_outcomes_text,
+        "rubric_criteria_sample": rubric_criteria[:20],
+        "breaks": {
+            "course_outcomes_no_rubric": course_outcomes_no_rubric,
+            "rubric_criteria_no_outcome": rubric_criteria_no_outcome,
+            "module_outcomes_no_rubric": module_outcomes_no_rubric,
+        },
+    }
+
+
+def _print_alignment_report(report: dict, label: str):
+    s = report["summary"]
+    print(f"\n{'='*62}\n  Alignment Audit — {label}\n{'='*62}")
+    print(f"  Course outcomes (syllabus):   {s['course_outcomes_count']}")
+    print(f"  Module outcomes (extracted):  {s['module_outcomes_count']}")
+    print(f"  Rubric criteria total:        {s['rubric_criteria_count']}")
+    print(f"  Assignments with rubric:      {s['assignments_with_rubric']}")
+    print(f"  Assignments without rubric:   {s['assignments_without_rubric']}")
+
+    b = s["breaks"]
+    print(f"\n  Alignment breaks:")
+    print(f"    Course outcomes with no matching rubric criterion: {b['course_outcomes_no_rubric']}")
+    print(f"    Rubric criteria with no matching outcome:          {b['rubric_criteria_no_outcome']}")
+    print(f"    Module outcomes with no matching rubric criterion: {b['module_outcomes_no_rubric']}")
+
+    if s["course_outcomes_count"] == 0:
+        print(f"\n  ⚠  No course outcomes extracted from syllabus.html.")
+        print(f"     The syllabus may not use a recognizable outcomes/objectives section.")
+        print(f"     Heuristic looks for a heading containing 'outcome' or 'objective' followed by a list.")
+
+    breaks = report["breaks"]
+    if breaks["course_outcomes_no_rubric"]:
+        print(f"\n  Course outcomes with no matching rubric criterion (top 5):")
+        for b in breaks["course_outcomes_no_rubric"][:5]:
+            print(f"    • {b['outcome'][:90]}{'…' if len(b['outcome']) > 90 else ''}")
+
+    if breaks["rubric_criteria_no_outcome"]:
+        print(f"\n  Rubric criteria with no matching outcome (top 5):")
+        for b in breaks["rubric_criteria_no_outcome"][:5]:
+            print(f"    • {b['assignment_name']} → \"{b['criterion_description'][:60]}\"")
+
+    print(f"\n  ⚠  Heuristic text-matching produces false positives — review before acting.")
+
+
+def _write_alignment_md_report(reports: list[dict], labels: dict, path: Path):
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [
+        "# Canvas Course Alignment Audit",
+        f"Generated: {now}",
+        "",
+        "Read-only audit of the alignment chain: Course Outcome → Module Outcome → Rubric Criterion → Activity.",
+        "Heuristic text-matching — false positives expected; treat as starting point for instructor review.",
+        "",
+    ]
+    for r in reports:
+        s = r["summary"]
+        b = s["breaks"]
+        label = s.get("label") or s["course_id"]
+        lines += [
+            f"## {label}",
+            "",
+            f"- **Course outcomes** (extracted from syllabus.html): {s['course_outcomes_count']}",
+            f"- **Module outcomes** (extracted from module pages): {s['module_outcomes_count']}",
+            f"- **Rubric criteria** (across all assignments): {s['rubric_criteria_count']}",
+            f"- **Assignments with rubric**: {s['assignments_with_rubric']}",
+            f"- **Assignments without rubric**: {s['assignments_without_rubric']}",
+            "",
+            "### Alignment breaks",
+            "",
+            f"- Course outcomes with no matching rubric criterion: **{b['course_outcomes_no_rubric']}**",
+            f"- Rubric criteria with no matching outcome: **{b['rubric_criteria_no_outcome']}**",
+            f"- Module outcomes with no matching rubric criterion: **{b['module_outcomes_no_rubric']}**",
+            "",
+        ]
+        breaks = r["breaks"]
+        if breaks["course_outcomes_no_rubric"]:
+            lines += ["#### Course outcomes with no rubric coverage", ""]
+            for entry in breaks["course_outcomes_no_rubric"]:
+                lines.append(f"- {entry['outcome']}")
+            lines.append("")
+        if breaks["rubric_criteria_no_outcome"]:
+            lines += ["#### Rubric criteria with no upstream outcome", "",
+                      "| Assignment | Criterion |", "|---|---|"]
+            for entry in breaks["rubric_criteria_no_outcome"]:
+                lines.append(f"| {entry['assignment_name']} | {entry['criterion_description']} |")
+            lines.append("")
+        if breaks["module_outcomes_no_rubric"]:
+            lines += ["#### Module outcomes with no rubric coverage", "",
+                      "| Module | Outcome |", "|---|---|"]
+            for entry in breaks["module_outcomes_no_rubric"]:
+                lines.append(f"| {entry['module_slug']} | {entry['outcome']} |")
+            lines.append("")
+    path.write_text("\n".join(lines))
+
+
 def _audit_files(course_id: str, label: str = "") -> dict:
     """Files audit: orphans, broken references, likely duplicates (issue #17, read-only).
 
@@ -749,6 +1027,10 @@ def main():
     parser.add_argument("--files",     action="store_true",
                         help="Files audit: orphans, broken references, duplicates "
                              "(read-only; consumes index['linked_files'] from canvas_sync) — issue #17")
+    parser.add_argument("--alignment", action="store_true",
+                        help="Alignment-chain audit: Course Outcome → Module Outcome → "
+                             "Rubric Criterion → Activity. Heuristic text-based matching, "
+                             "read-only — issue #18")
     args = parser.parse_args()
 
     if not CANVAS_API_TOKEN or not CANVAS_BASE_URL:
@@ -777,6 +1059,25 @@ def main():
         sys.exit(1)
 
     REPORT_DIR.mkdir(exist_ok=True)
+
+    # Alignment audit (issue #18) — separate, read-only audit. Doesn't run alongside
+    # the default audit; --alignment switches modes entirely.
+    if args.alignment:
+        align_reports = []
+        labels_by_id: dict = {}
+        for course_id, label in targets:
+            print(f"  Auditing alignment for {label}...")
+            r = _audit_alignment(course_id, label=label)
+            _print_alignment_report(r, label)
+            align_reports.append(r)
+            labels_by_id[course_id] = label
+            audit_path = REPORT_DIR / f"alignment_audit_{course_id}.json"
+            audit_path.write_text(json.dumps(r, indent=2, default=str))
+
+        md_path = Path("quality_report.md")
+        _write_alignment_md_report(align_reports, labels_by_id, md_path)
+        print(f"\n  Alignment audit → {md_path} + .canvas/alignment_audit_*.json")
+        sys.exit(0)
 
     # Files audit (issue #17) — separate, read-only audit. Doesn't run alongside the
     # default duplicate-and-window audit; --files switches modes entirely.
