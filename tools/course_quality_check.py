@@ -398,6 +398,217 @@ def _print_report(report: dict, label: str):
             print(f"      → {it['action']}")
 
 
+def _audit_files(course_id: str, label: str = "") -> dict:
+    """Files audit: orphans, broken references, likely duplicates (issue #17, read-only).
+
+    Reads index["linked_files"] from .canvas/index.json (built by canvas_sync.py
+    via /courses/X/files/N reference scanning) and cross-references with the
+    full Canvas Files inventory at GET /courses/:id/files.
+
+    Returns a dict with:
+      summary: counts and sizes
+      orphans: files in Canvas but not referenced from any content
+      broken_references: file IDs referenced from content but missing from Canvas
+      duplicates: files with same display_name but different IDs
+    """
+    # Read linked_files reverse map from canvas_sync's index
+    index_path = Path(".canvas/index.json")
+    linked_files = {}
+    if index_path.exists():
+        try:
+            idx = json.loads(index_path.read_text())
+            linked_files = idx.get("linked_files", {})
+        except Exception:
+            pass
+
+    # Fetch full Canvas Files inventory
+    inventory = _get_all(f"{CANVAS_BASE_URL}/api/v1/courses/{course_id}/files",
+                         params={"per_page": 100})
+    inventory_by_id = {f["id"]: f for f in inventory}
+    inventory_ids = set(inventory_by_id.keys())
+    linked_ids = {int(fid) for fid in linked_files.keys()}
+
+    # Orphans: in Canvas but not referenced
+    orphan_ids = inventory_ids - linked_ids
+    orphans = []
+    orphan_size = 0
+    for fid in orphan_ids:
+        f = inventory_by_id[fid]
+        size = f.get("size") or 0
+        orphan_size += size
+        orphans.append({
+            "canvas_file_id": fid,
+            "filename": f.get("filename"),
+            "display_name": f.get("display_name"),
+            "size": size,
+            "uploaded_at": f.get("created_at") or f.get("updated_at"),
+            "folder_id": f.get("folder_id"),
+            "url": f.get("url"),
+        })
+    orphans.sort(key=lambda x: -(x["size"] or 0))
+
+    # Broken references: referenced from content but file deleted from Canvas
+    broken_ids = linked_ids - inventory_ids
+    broken_references = []
+    for fid in broken_ids:
+        entry = linked_files.get(str(fid), {})
+        broken_references.append({
+            "missing_file_id": fid,
+            "referenced_by": entry.get("referenced_by", []),
+        })
+
+    # Duplicates: same display_name, different IDs
+    by_name: dict = {}
+    for f in inventory:
+        name = (f.get("display_name") or f.get("filename") or "?").strip()
+        by_name.setdefault(name, []).append(f)
+    duplicates = []
+    for name, instances in by_name.items():
+        if len(instances) > 1:
+            duplicates.append({
+                "display_name": name,
+                "instances": [{
+                    "canvas_file_id": f["id"],
+                    "size": f.get("size", 0),
+                    "uploaded_at": f.get("created_at") or f.get("updated_at"),
+                    "referenced": f["id"] in linked_ids,
+                } for f in instances],
+            })
+
+    total_size = sum((f.get("size") or 0) for f in inventory)
+    summary = {
+        "course_id": course_id,
+        "label": label,
+        "total_files": len(inventory),
+        "referenced_count": len(inventory_ids & linked_ids),
+        "orphan_count": len(orphans),
+        "broken_reference_count": len(broken_references),
+        "duplicate_groups": len(duplicates),
+        "total_size_bytes": total_size,
+        "orphan_size_bytes": orphan_size,
+        "linked_files_data_available": bool(linked_files),
+    }
+
+    return {
+        "summary": summary,
+        "orphans": orphans,
+        "broken_references": broken_references,
+        "duplicates": duplicates,
+    }
+
+
+def _format_size_bytes(size_bytes: int) -> str:
+    """Human-readable byte count."""
+    if size_bytes is None:
+        return "?"
+    size = float(size_bytes)
+    for unit in ("B", "KB", "MB", "GB", "TB"):
+        if size < 1024:
+            return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
+        size /= 1024
+    return f"{size:.1f} PB"
+
+
+def _print_files_report(report: dict, label: str):
+    """Pretty-print a files audit to stdout."""
+    s = report["summary"]
+    print(f"\n{'='*62}\n  Files Audit — {label}\n{'='*62}")
+    print(f"  Total files in Canvas:    {s['total_files']}")
+    print(f"  Referenced by content:    {s['referenced_count']}"
+          + (f"  ({100*s['referenced_count']//max(s['total_files'],1)}%)" if s["total_files"] else ""))
+    print(f"  Orphans (unreferenced):   {s['orphan_count']}")
+    print(f"  Broken references:        {s['broken_reference_count']}")
+    print(f"  Duplicate-name groups:    {s['duplicate_groups']}")
+    print(f"  Total storage:            {_format_size_bytes(s['total_size_bytes'])}")
+    print(f"  Orphan storage:           {_format_size_bytes(s['orphan_size_bytes'])}  ← cleanup candidate")
+
+    if not s["linked_files_data_available"]:
+        print(f"\n  ⚠  No linked_files data — orphan/broken-reference accuracy degraded.")
+        print(f"     Run: uv run python tools/canvas_sync.py --pull")
+        print(f"     (canvas_sync scans content for /courses/X/files/N references and")
+        print(f"      writes the reverse map this audit consumes.)")
+
+    if report["orphans"]:
+        top = report["orphans"][:10]
+        print(f"\n  Top {len(top)} orphans by size:")
+        for o in top:
+            name = (o["display_name"] or o["filename"] or "?")[:50]
+            print(f"    {_format_size_bytes(o['size']):>10}  {name:<50}  id={o['canvas_file_id']}")
+
+    if report["broken_references"]:
+        print(f"\n  Broken references ({len(report['broken_references'])}):")
+        for br in report["broken_references"][:10]:
+            print(f"    file_id={br['missing_file_id']} referenced by:")
+            for src in br["referenced_by"][:3]:
+                print(f"      - {src}")
+            if len(br["referenced_by"]) > 3:
+                print(f"      + {len(br['referenced_by']) - 3} more")
+
+    if report["duplicates"]:
+        print(f"\n  Likely duplicates ({len(report['duplicates'])} groups):")
+        for d in report["duplicates"][:5]:
+            unrefs = sum(1 for i in d["instances"] if not i["referenced"])
+            print(f"    \"{d['display_name']}\" — {len(d['instances'])} copies, {unrefs} unreferenced")
+
+
+def _write_files_md_report(reports: list[dict], labels: dict, path: Path):
+    """Append/overwrite the files audit section in quality_report.md."""
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    lines = [
+        "# Canvas Course Files Audit",
+        f"Generated: {now}",
+        "",
+        "Read-only audit of file storage and references. Run via:",
+        "`uv run python tools/course_quality_check.py --files`",
+        "",
+    ]
+    for r in reports:
+        s = r["summary"]
+        label = s.get("label") or s["course_id"]
+        lines += [
+            f"## {label}",
+            "",
+            f"- **Total files in Canvas**: {s['total_files']}",
+            f"- **Referenced by content**: {s['referenced_count']}",
+            f"- **Orphans (unreferenced)**: {s['orphan_count']}",
+            f"- **Broken references**: {s['broken_reference_count']}",
+            f"- **Duplicate-name groups**: {s['duplicate_groups']}",
+            f"- **Total storage**: {_format_size_bytes(s['total_size_bytes'])}",
+            f"- **Orphan storage**: {_format_size_bytes(s['orphan_size_bytes'])} (cleanup candidate)",
+            "",
+        ]
+        if not s["linked_files_data_available"]:
+            lines += [
+                "> ⚠ No `linked_files` data found in `.canvas/index.json`. Run `canvas_sync.py --pull` first.",
+                "",
+            ]
+        if r["orphans"]:
+            lines += ["### Top orphans by size", "", "| Size | Display name | Filename | ID |", "|---|---|---|---|"]
+            for o in r["orphans"][:20]:
+                lines.append(
+                    f"| {_format_size_bytes(o['size'])} | {o.get('display_name') or '—'} | "
+                    f"{o.get('filename') or '—'} | {o['canvas_file_id']} |"
+                )
+            lines.append("")
+        if r["broken_references"]:
+            lines += ["### Broken references", "",
+                      "| Missing file ID | Referenced from |", "|---|---|"]
+            for br in r["broken_references"]:
+                refs = "<br>".join(br["referenced_by"][:3])
+                if len(br["referenced_by"]) > 3:
+                    refs += f"<br>+ {len(br['referenced_by']) - 3} more"
+                lines.append(f"| {br['missing_file_id']} | {refs or '—'} |")
+            lines.append("")
+        if r["duplicates"]:
+            lines += ["### Likely duplicates (same display name)", "",
+                      "| Display name | Copies | Unreferenced |", "|---|---|---|"]
+            for d in r["duplicates"]:
+                unrefs = sum(1 for i in d["instances"] if not i["referenced"])
+                lines.append(f"| {d['display_name']} | {len(d['instances'])} | {unrefs} |")
+            lines.append("")
+    path.write_text("\n".join(lines))
+
+
 def _write_md_report(reports: list[dict], labels: dict, path: Path):
     """Write a combined markdown quality report for all audited courses."""
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
@@ -535,6 +746,9 @@ def main():
     parser.add_argument("--course",    metavar="ID",        help="Check a specific course ID")
     parser.add_argument("--fix",       action="store_true", help="Auto-fix duplicate issues (deletes extras)")
     parser.add_argument("--dry-run",   action="store_true", help="Show what --fix would do without changing Canvas")
+    parser.add_argument("--files",     action="store_true",
+                        help="Files audit: orphans, broken references, duplicates "
+                             "(read-only; consumes index['linked_files'] from canvas_sync) — issue #17")
     args = parser.parse_args()
 
     if not CANVAS_API_TOKEN or not CANVAS_BASE_URL:
@@ -563,6 +777,26 @@ def main():
         sys.exit(1)
 
     REPORT_DIR.mkdir(exist_ok=True)
+
+    # Files audit (issue #17) — separate, read-only audit. Doesn't run alongside the
+    # default duplicate-and-window audit; --files switches modes entirely.
+    if args.files:
+        files_reports = []
+        labels_by_id: dict = {}
+        for course_id, label in targets:
+            print(f"  Auditing files for {label}...")
+            r = _audit_files(course_id, label=label)
+            _print_files_report(r, label)
+            files_reports.append(r)
+            labels_by_id[course_id] = label
+            audit_path = REPORT_DIR / f"file_audit_{course_id}.json"
+            audit_path.write_text(json.dumps(r, indent=2, default=str))
+
+        md_path = Path("quality_report.md")
+        _write_files_md_report(files_reports, labels_by_id, md_path)
+        print(f"\n  Files audit → {md_path} + .canvas/file_audit_*.json")
+        sys.exit(0)
+
     all_clean = True
     all_reports = []
     label_map = {}
