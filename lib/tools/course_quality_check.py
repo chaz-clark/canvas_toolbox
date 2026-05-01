@@ -22,14 +22,16 @@ Usage:
     uv run python tools/course_quality_check.py --course 415322    # specific ID
     uv run python tools/course_quality_check.py --fix              # auto-fix fixable issues (source)
     uv run python tools/course_quality_check.py --fix --master     # auto-fix on master
+    uv run python tools/course_quality_check.py --validate-dates   # date audit (read-only)
 """
 
 import argparse
 import json
 import os
+import re
 import sys
 from collections import Counter, defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import requests
@@ -95,6 +97,20 @@ def _get_course_window(course_id: str) -> tuple:
         d = r.json()
         return _parse_dt(d.get("start_at")), _parse_dt(d.get("end_at"))
     return None, None
+
+
+_WEEK_RE   = re.compile(r'\bWeek\s+(\d+)\b', re.IGNORECASE)
+_SPRINT_RE = re.compile(r'\bS\s*(\d+)\b')   # uppercase S only — avoids false positives on "s" words
+
+
+def _week_of_course(dt: datetime, start_at: datetime) -> int | None:
+    delta = (dt.date() - start_at.date()).days
+    return delta // 7 + 1 if delta >= 0 else None
+
+
+def _sprint_of_course(dt: datetime, start_at: datetime, sprint_weeks: int = 2) -> int | None:
+    delta = (dt.date() - start_at.date()).days
+    return delta // (sprint_weeks * 7) + 1 if delta >= 0 else None
 
 
 def _audit_course(course_id: str) -> dict:
@@ -982,6 +998,264 @@ def _write_md_report(reports: list[dict], labels: dict, path: Path):
     path.write_text("\n".join(lines), encoding="utf-8")
 
 
+def _audit_dates(course_id: str, label: str = "") -> dict:
+    """Date-specific audit (issue #20, read-only). Four checks:
+    1. Out-of-window: due_at/lock_at/unlock_at outside course start_at..end_at
+    2. Timestamp ordering: lock_at before due_at, or unlock_at after due_at
+    3. Duplicate due dates within the same assignment group (same UTC calendar day)
+    4. Label-vs-week drift: 'Week N' or 'SN' items due outside expected course week/sprint
+    All timestamps compared in UTC — findings within 24h of a boundary may be timezone artifacts.
+    """
+    base = CANVAS_BASE_URL
+    findings = []
+
+    start_at, end_at = _get_course_window(course_id)
+    if not start_at or not end_at:
+        return {
+            "course_id": course_id,
+            "label": label,
+            "checked_at": datetime.now(timezone.utc).isoformat(),
+            "course_window": {"start_at": None, "end_at": None},
+            "findings": [],
+            "error": "No course start_at/end_at — date checks skipped. Set course dates in Canvas Settings.",
+            "summary": {"total": 0},
+        }
+
+    assignments  = _get_all(f"{base}/api/v1/courses/{course_id}/assignments")
+    quizzes      = _get_all(f"{base}/api/v1/courses/{course_id}/quizzes")
+    discussions  = _get_all(f"{base}/api/v1/courses/{course_id}/discussion_topics")
+    groups       = _get_all(f"{base}/api/v1/courses/{course_id}/assignment_groups")
+    group_names  = {g["id"]: g["name"] for g in groups}
+
+    window_str = f"{start_at.date()} → {end_at.date()}"
+
+    # ── 1. Out-of-window ──────────────────────────────────────
+    def _check_window(item_type, name, canvas_id, fields: dict):
+        for field, value in fields.items():
+            dt = _parse_dt(value)
+            if dt and not (start_at <= dt <= end_at):
+                findings.append({
+                    "check": "out_of_window",
+                    "item_type": item_type,
+                    "title": name,
+                    "canvas_id": canvas_id,
+                    "field": field,
+                    "value": value[:10],
+                    "note": f"{item_type.title()} '{name}' {field}={value[:10]} is outside course window {window_str}",
+                    "fix": f"Update {field} to a date within {window_str}",
+                })
+
+    for a in assignments:
+        _check_window("assignment", a["name"], a["id"],
+                      {f: a.get(f) for f in ("due_at", "lock_at", "unlock_at") if a.get(f)})
+    for q in quizzes:
+        _check_window("quiz", q["title"], q["id"],
+                      {f: q.get(f) for f in ("due_at", "lock_at", "unlock_at") if q.get(f)})
+    for d in discussions:
+        if d.get("todo_date"):
+            _check_window("discussion", d["title"], d["id"], {"todo_date": d["todo_date"]})
+
+    # ── 2. Timestamp ordering sanity ──────────────────────────
+    def _check_ordering(item_type, name, canvas_id, due_val, lock_val, unlock_val):
+        due    = _parse_dt(due_val)
+        lock   = _parse_dt(lock_val)
+        unlock = _parse_dt(unlock_val)
+        if due and lock and lock < due:
+            findings.append({
+                "check": "lock_before_due",
+                "item_type": item_type,
+                "title": name,
+                "canvas_id": canvas_id,
+                "due_at": due_val[:10],
+                "lock_at": lock_val[:10],
+                "note": f"{item_type.title()} '{name}': lock_at ({lock_val[:10]}) is before due_at ({due_val[:10]}) — students lose access before the deadline",
+                "fix": "Set lock_at on or after due_at",
+            })
+        if due and unlock and unlock > due:
+            findings.append({
+                "check": "unlock_after_due",
+                "item_type": item_type,
+                "title": name,
+                "canvas_id": canvas_id,
+                "due_at": due_val[:10],
+                "unlock_at": unlock_val[:10],
+                "note": f"{item_type.title()} '{name}': unlock_at ({unlock_val[:10]}) is after due_at ({due_val[:10]}) — item unlocks after it's already due",
+                "fix": "Set unlock_at on or before due_at",
+            })
+
+    for a in assignments:
+        _check_ordering("assignment", a["name"], a["id"],
+                        a.get("due_at"), a.get("lock_at"), a.get("unlock_at"))
+    for q in quizzes:
+        _check_ordering("quiz", q["title"], q["id"],
+                        q.get("due_at"), q.get("lock_at"), q.get("unlock_at"))
+
+    # ── 3. Duplicate due dates within an assignment group ─────
+    by_group_day: dict = defaultdict(list)
+    for a in assignments:
+        gid = a.get("assignment_group_id")
+        due = _parse_dt(a.get("due_at"))
+        if gid and due:
+            by_group_day[(gid, due.date())].append(a)
+
+    for (gid, day), items in by_group_day.items():
+        if len(items) > 1:
+            group_name = group_names.get(gid, f"group {gid}")
+            titles = [i["name"] for i in items]
+            findings.append({
+                "check": "duplicate_due_date_in_group",
+                "assignment_group": group_name,
+                "due_date": str(day),
+                "titles": titles,
+                "canvas_ids": [i["id"] for i in items],
+                "note": f"Group '{group_name}': {len(items)} items share due date {day} — {', '.join(repr(t) for t in titles)}",
+                "fix": "Spread items across different due dates, or confirm this is intentional",
+            })
+
+    # ── 4. Label-vs-week/sprint drift ────────────────────────
+    all_dated = (
+        [("assignment", a["name"], a["id"], a.get("due_at")) for a in assignments] +
+        [("quiz",       q["title"], q["id"], q.get("due_at")) for q in quizzes] +
+        [("discussion", d["title"], d["id"], d.get("todo_date")) for d in discussions]
+    )
+    for item_type, name, canvas_id, date_val in all_dated:
+        dt = _parse_dt(date_val)
+        if not dt or not date_val:
+            continue
+        wm = _WEEK_RE.search(name)
+        if wm:
+            labeled = int(wm.group(1))
+            actual  = _week_of_course(dt, start_at)
+            if actual is not None and actual != labeled:
+                exp_start = (start_at + timedelta(weeks=labeled - 1)).date()
+                exp_end   = (start_at + timedelta(weeks=labeled)).date()
+                findings.append({
+                    "check": "label_week_drift",
+                    "item_type": item_type,
+                    "title": name,
+                    "canvas_id": canvas_id,
+                    "labeled_week": labeled,
+                    "actual_week": actual,
+                    "due_date": date_val[:10],
+                    "note": f"{item_type.title()} '{name}': label says Week {labeled} but due {date_val[:10]} falls in Week {actual} of the course",
+                    "fix": f"Rename to 'Week {actual}' OR move due date into Week {labeled} window ({exp_start} → {exp_end})",
+                })
+            continue  # don't also check sprint pattern on the same item
+        sm = _SPRINT_RE.search(name)
+        if sm:
+            labeled = int(sm.group(1))
+            actual  = _sprint_of_course(dt, start_at)
+            if actual is not None and actual != labeled:
+                exp_start = (start_at + timedelta(weeks=(labeled - 1) * 2)).date()
+                exp_end   = (start_at + timedelta(weeks=labeled * 2)).date()
+                findings.append({
+                    "check": "label_sprint_drift",
+                    "item_type": item_type,
+                    "title": name,
+                    "canvas_id": canvas_id,
+                    "labeled_sprint": labeled,
+                    "actual_sprint": actual,
+                    "due_date": date_val[:10],
+                    "note": f"{item_type.title()} '{name}': label says Sprint {labeled} but due {date_val[:10]} falls in Sprint {actual} (2-week sprints assumed)",
+                    "fix": f"Rename to 'S{actual}' OR move due date into Sprint {labeled} window ({exp_start} → {exp_end})",
+                })
+
+    return {
+        "course_id": course_id,
+        "label": label,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "course_window": {
+            "start_at": start_at.isoformat(),
+            "end_at":   end_at.isoformat(),
+        },
+        "findings": findings,
+        "summary": {"total": len(findings)},
+    }
+
+
+def _print_dates_report(report: dict, label: str):
+    w = report["course_window"]
+    findings = report.get("findings", [])
+    total = report["summary"]["total"]
+
+    print(f"\n{'='*62}\n  Date Validation — {label}\n{'='*62}")
+    if report.get("error"):
+        print(f"  {report['error']}")
+        return
+
+    print(f"  Course window: {w['start_at'][:10] if w['start_at'] else 'n/a'} → {w['end_at'][:10] if w['end_at'] else 'n/a'}")
+    print(f"  Findings: {total}")
+
+    by_check: dict = defaultdict(list)
+    for f in findings:
+        by_check[f["check"]].append(f)
+
+    check_labels = {
+        "out_of_window":              "Out-of-window dates",
+        "lock_before_due":            "Lock before due",
+        "unlock_after_due":           "Unlock after due",
+        "duplicate_due_date_in_group":"Duplicate due dates in group",
+        "label_week_drift":           "Label-vs-week drift",
+        "label_sprint_drift":         "Label-vs-sprint drift",
+    }
+    for check, items in by_check.items():
+        print(f"\n  {check_labels.get(check, check)} ({len(items)})")
+        for f in items:
+            print(f"    • {f['note']}")
+            print(f"      Fix: {f['fix']}")
+
+    if total == 0:
+        print("  All date checks passed.")
+
+
+def _write_dates_md_report(reports: list[dict], labels: dict, path: Path):
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    check_labels = {
+        "out_of_window":               "Out-of-window dates",
+        "lock_before_due":             "Lock before due",
+        "unlock_after_due":            "Unlock after due",
+        "duplicate_due_date_in_group": "Duplicate due dates in assignment group",
+        "label_week_drift":            "Label-vs-week drift",
+        "label_sprint_drift":          "Label-vs-sprint drift",
+    }
+    lines = [
+        "# Canvas Date Validation Report",
+        f"Generated: {now}",
+        "",
+        "Read-only. All timestamps compared in UTC — findings within 24 h of a boundary may be timezone artifacts.",
+        "Sprint drift assumes 2-week sprints.",
+        "",
+    ]
+    for r in reports:
+        label = r.get("label") or r["course_id"]
+        w = r["course_window"]
+        findings = r.get("findings", [])
+        total = r["summary"]["total"]
+        lines += [
+            f"## {label}",
+            "",
+            f"- **Course window**: {w['start_at'][:10] if w['start_at'] else 'n/a'} → {w['end_at'][:10] if w['end_at'] else 'n/a'}",
+            f"- **Total findings**: {total}",
+            "",
+        ]
+        if r.get("error"):
+            lines += [f"> {r['error']}", ""]
+            continue
+        if not findings:
+            lines += ["All date checks passed.", ""]
+            continue
+        by_check: dict = defaultdict(list)
+        for f in findings:
+            by_check[f["check"]].append(f)
+        for check, items in by_check.items():
+            lines += [f"### {check_labels.get(check, check)} ({len(items)})", ""]
+            for f in items:
+                lines.append(f"- {f['note']}")
+                lines.append(f"  - Fix: {f['fix']}")
+            lines.append("")
+    path.write_text("\n".join(lines), encoding="utf-8")
+
+
 def _apply_fixes(course_id: str, report: dict, dry_run: bool = False):
     """Delete duplicate items and report date issues (date fixes need human confirmation)."""
     base = CANVAS_BASE_URL
@@ -1031,6 +1305,10 @@ def main():
                         help="Alignment-chain audit: Course Outcome → Module Outcome → "
                              "Rubric Criterion → Activity. Heuristic text-based matching, "
                              "read-only — issue #18")
+    parser.add_argument("--validate-dates", action="store_true",
+                        help="Date validation: out-of-window, timestamp ordering, "
+                             "duplicate due dates per group, label-vs-week/sprint drift. "
+                             "Read-only — issue #20")
     args = parser.parse_args()
 
     if not CANVAS_API_TOKEN or not CANVAS_BASE_URL:
@@ -1059,6 +1337,25 @@ def main():
         sys.exit(1)
 
     REPORT_DIR.mkdir(exist_ok=True)
+
+    # Date validation (issue #20) — separate, read-only audit.
+    if args.validate_dates:
+        date_reports = []
+        labels_by_id: dict = {}
+        for course_id, label in targets:
+            print(f"  Validating dates for {label}...")
+            r = _audit_dates(course_id, label=label)
+            _print_dates_report(r, label)
+            date_reports.append(r)
+            labels_by_id[course_id] = label
+            audit_path = REPORT_DIR / f"date_audit_{course_id}.json"
+            audit_path.write_text(json.dumps(r, indent=2, default=str))
+
+        md_path = Path("quality_report.md")
+        _write_dates_md_report(date_reports, labels_by_id, md_path)
+        total = sum(r["summary"]["total"] for r in date_reports)
+        print(f"\n  Date validation → {md_path} + .canvas/date_audit_*.json")
+        sys.exit(1 if total > 0 else 0)
 
     # Alignment audit (issue #18) — separate, read-only audit. Doesn't run alongside
     # the default audit; --alignment switches modes entirely.
