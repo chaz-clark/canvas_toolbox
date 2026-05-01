@@ -184,6 +184,130 @@ def _slug(text: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# File reference helpers (issue #16 — file-aware pulling)
+# ---------------------------------------------------------------------------
+
+LINKED_FILES_DIR = Path("course/_files")
+_FILE_REF_PATTERN = re.compile(r"/courses/\d+/files/(\d+)")
+
+
+def _extract_file_refs(text: Optional[str]) -> set:
+    """Find /courses/X/files/N references. Returns set of canvas_file_ids (int)."""
+    if not text:
+        return set()
+    return {int(m) for m in _FILE_REF_PATTERN.findall(text)}
+
+
+def _format_size(size_bytes: Optional[int]) -> str:
+    """Human-readable byte count. Returns '?' if size_bytes is None."""
+    if size_bytes is None:
+        return "?"
+    for unit in ("B", "KB", "MB", "GB"):
+        if size_bytes < 1024:
+            return f"{size_bytes:.1f} {unit}" if unit != "B" else f"{size_bytes} B"
+        size_bytes /= 1024
+    return f"{size_bytes:.1f} TB"
+
+
+def _parse_size(size_str: Optional[str]) -> Optional[int]:
+    """Parse '50mb', '1.5gb', '500kb' → bytes. Returns None for None/invalid."""
+    if not size_str:
+        return None
+    s = size_str.strip().lower()
+    multipliers = {"kb": 1024, "mb": 1024**2, "gb": 1024**3, "tb": 1024**4, "b": 1}
+    for suffix, mult in sorted(multipliers.items(), key=lambda x: -len(x[0])):
+        if s.endswith(suffix):
+            try:
+                return int(float(s[: -len(suffix)]) * mult)
+            except ValueError:
+                return None
+    try:
+        return int(s)  # bare number = bytes
+    except ValueError:
+        return None
+
+
+def _get_file_metadata(course_id: str, file_id: int) -> Optional[dict]:
+    """GET /courses/:id/files/:file_id — returns dict or None on error/missing."""
+    data = _get(f"/courses/{course_id}/files/{file_id}")
+    if isinstance(data, list) or not data or data.get("error"):
+        return None
+    return data
+
+
+def _search_files(course_id: str, pattern: str) -> list:
+    """GET /courses/:id/files?search_term=<pattern> — fuzzy search by filename/display_name."""
+    data = _get(f"/courses/{course_id}/files", params={"search_term": pattern, "per_page": 50})
+    return data if isinstance(data, list) else []
+
+
+def _download_file(file_meta: dict, local_path: Path) -> bool:
+    """Download a file via its pre-signed URL. Returns True on success."""
+    url = file_meta.get("url")
+    if not url:
+        return False
+    try:
+        resp = requests.get(url, timeout=120, stream=True)
+        if resp.status_code >= 400:
+            return False
+        local_path.parent.mkdir(parents=True, exist_ok=True)
+        with local_path.open("wb") as f:
+            for chunk in resp.iter_content(chunk_size=65536):
+                f.write(chunk)
+        return True
+    except Exception:
+        return False
+
+
+def _prompt_file_download(file_inventory: dict, total_size: int) -> bool:
+    """Show summary, prompt user. Returns True to proceed, False to skip.
+
+    Thresholds:
+      < 50 MB    → silent (auto-proceed, return True)
+      50 MB-1 GB → prompt with summary + top-N largest
+      > 1 GB     → prompt with full list before proceeding
+    """
+    if os.getenv("CANVAS_SYNC_NO_PROMPT"):
+        return True
+
+    size_mb = total_size / (1024 * 1024)
+    if size_mb < 50:
+        return True
+
+    n = len(file_inventory)
+    sorted_files = sorted(file_inventory.values(), key=lambda f: -(f.get("size") or 0))
+    top_count = n if size_mb > 1024 else min(5, n)
+
+    print(f"\nFound {n} referenced file(s)")
+    print(f"  Total: {_format_size(total_size)}")
+    if top_count > 0:
+        print(f"  {'Full list' if size_mb > 1024 else f'Largest {top_count}'}:")
+        for f in sorted_files[:top_count]:
+            name = f.get("display_name") or f.get("filename", "?")
+            print(f"    - {name:<50} {_format_size(f.get('size'))}")
+        if size_mb <= 1024 and n > top_count:
+            print(f"    + {n - top_count} smaller files")
+
+    try:
+        ans = input(f"\nDownload {n} file(s)? [Y/n]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return False
+    return ans in ("", "y", "yes")
+
+
+def _local_path_for_file(file_meta: dict, folder_paths: dict) -> Path:
+    """Resolve the local path under course/_files/ for a file based on its Canvas folder."""
+    folder_id = file_meta.get("folder_id")
+    folder_full_name = folder_paths.get(folder_id, "")
+    # Strip leading "course files/" prefix from Canvas folder paths
+    rel_folder = folder_full_name.removeprefix("course files/").removeprefix("course files").lstrip("/")
+    filename = file_meta.get("filename") or file_meta.get("display_name", f"file_{file_meta['id']}")
+    if rel_folder:
+        return LINKED_FILES_DIR / rel_folder / filename
+    return LINKED_FILES_DIR / filename
+
+
+# ---------------------------------------------------------------------------
 # New Quizzes API helpers (separate base path: /api/quiz/v1/)
 # ---------------------------------------------------------------------------
 
@@ -375,6 +499,12 @@ def cmd_init():
     index["files"] = {}  # rebuild from scratch — removes stale entries from renames/deletes
     index["modules"] = []  # rebuilt fresh each init
 
+    # Issue #16 — reverse map of canvas_file_id → list of source content files that reference it.
+    # Built as a side effect of pulling content; consumed by --pull-files (this script) and
+    # course_quality_check.py --files (orphan/broken-reference audit, issue #17).
+    index["linked_files"] = {}
+    referenced_by: dict = {}  # {canvas_file_id: [content_filepath, ...]}
+
     # Course metadata + Syllabus
     course = _get(f"/courses/{course_id}?include[]=syllabus_body")
     COURSE_DIR.mkdir(exist_ok=True)
@@ -421,12 +551,16 @@ def cmd_init():
             "title": homepage.get("title", ""),
             "hash": h_hp,
         }
+        for fid in _extract_file_refs(homepage_body):
+            referenced_by.setdefault(fid, []).append(str(homepage_path))
         _vprint(f"  [homepage] homepage.html ({len(homepage_body)} chars)")
 
     # Syllabus (Canvas left-sidebar Syllabus tab — not a module item)
     syllabus_body = course.get("syllabus_body", "")
     syllabus_path = COURSE_DIR / "syllabus.html"
     syllabus_path.write_text(syllabus_body, encoding="utf-8")
+    for fid in _extract_file_refs(syllabus_body):
+        referenced_by.setdefault(fid, []).append(str(syllabus_path))
     h = _file_hash(syllabus_path)
     index["syllabus"] = {
         "type": "Syllabus",
@@ -487,6 +621,8 @@ def cmd_init():
                 body = _pull_page(course_id, page_url)
                 if body is not None:
                     filepath.write_text(body, encoding="utf-8")
+                    for fid in _extract_file_refs(body):
+                        referenced_by.setdefault(fid, []).append(str(filepath))
                     item_record["filename"] = filename
                     item_record["page_url"] = page_url
                     h = _file_hash(filepath)
@@ -520,6 +656,8 @@ def cmd_init():
                 data = _pull_assignment(course_id, content_id)
                 if data:
                     filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+                    for fid in _extract_file_refs(data.get("description", "")):
+                        referenced_by.setdefault(fid, []).append(str(filepath))
                     item_record["filename"] = filename
                     h = _file_hash(filepath)
                     # Distinguish New Quizzes (external_tool) from plain assignments
@@ -562,6 +700,8 @@ def cmd_init():
                 data = _pull_discussion(course_id, content_id)
                 if data:
                     filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+                    for fid in _extract_file_refs(data.get("message", "")):
+                        referenced_by.setdefault(fid, []).append(str(filepath))
                     item_record["filename"] = filename
                     h = _file_hash(filepath)
                     _item_dates = {
@@ -587,6 +727,8 @@ def cmd_init():
                 data = _pull_quiz(course_id, content_id)
                 if data:
                     filepath.write_text(json.dumps(data, indent=2, default=str), encoding="utf-8")
+                    for fid in _extract_file_refs(data.get("description", "")):
+                        referenced_by.setdefault(fid, []).append(str(filepath))
                     item_record["filename"] = filename
                     h = _file_hash(filepath)
                     _item_dates = {
@@ -804,6 +946,19 @@ def cmd_init():
         for e in (cal_events if isinstance(cal_events, list) else [])
     ]
     print(f"  {len(index['calendar_events'])} calendar events")
+
+    # -----------------------------------------------------------------------
+    # Consolidate file-reference scan into index["linked_files"] (issue #16)
+    # -----------------------------------------------------------------------
+    for fid, sources in referenced_by.items():
+        index["linked_files"][str(fid)] = {
+            "canvas_file_id": fid,
+            "referenced_by": sorted(set(sources)),
+            # filename, size, folder, url, local_path are populated only when
+            # the user explicitly runs --pull-files (which fetches metadata + downloads).
+        }
+    if referenced_by:
+        print(f"  {len(referenced_by)} file reference(s) discovered across content")
 
     _save_index(index)
     total = len(index["files"])
@@ -1377,6 +1532,192 @@ def cmd_pull(target: str):
 
 
 # ---------------------------------------------------------------------------
+# File-aware pulling commands (issue #16)
+# ---------------------------------------------------------------------------
+
+def cmd_pull_files(max_file_size: Optional[int] = None,
+                   max_total_size: Optional[int] = None) -> None:
+    """Download referenced Canvas files into course/_files/ based on index["linked_files"].
+
+    Run --pull first to populate the linked_files reverse map. This command
+    fetches metadata for each referenced file_id, prompts for size confirmation,
+    then downloads approved files. Updates each entry with metadata + local_path.
+
+    Args:
+        max_file_size: skip individual files larger than this (bytes); None = no limit
+        max_total_size: abort if total scanned size exceeds this (bytes); None = no limit
+    """
+    _check_env()
+    index = _load_index()
+    linked = index.get("linked_files", {})
+
+    if not linked:
+        print("No file references in index. Run --pull first to scan content for /courses/X/files/N references.")
+        return
+
+    print(f"Fetching metadata for {len(linked)} referenced file(s)...\n")
+
+    # Fetch folder hierarchy once for path resolution
+    folders = _get(f"/courses/{CANVAS_COURSE_ID}/folders", params={"per_page": 100})
+    folder_paths = {f["id"]: f.get("full_name", "") for f in (folders if isinstance(folders, list) else [])}
+
+    file_inventory: dict = {}  # {fid: meta_dict}
+    missing: list = []
+    total_size = 0
+    for fid_str in linked.keys():
+        fid = int(fid_str)
+        meta = _get_file_metadata(CANVAS_COURSE_ID, fid)
+        if meta is None:
+            missing.append(fid)
+            continue
+        size = meta.get("size", 0) or 0
+        if max_file_size is not None and size > max_file_size:
+            _vprint(f"  [skip-large] file {fid} ({_format_size(size)}) exceeds --max-file-size")
+            continue
+        file_inventory[fid] = meta
+        total_size += size
+
+    if missing:
+        print(f"  {len(missing)} file(s) referenced from content but no longer exist in Canvas (broken references)")
+        for fid in missing[:5]:
+            srcs = linked[str(fid)].get("referenced_by", [])
+            print(f"    file_id={fid} (referenced by {len(srcs)} content file(s))")
+
+    if not file_inventory:
+        print("\nNothing to download.")
+        return
+
+    if max_total_size is not None and total_size > max_total_size:
+        print(f"\nABORT: total size {_format_size(total_size)} exceeds --max-total-size {_format_size(max_total_size)}.")
+        return
+
+    if not _prompt_file_download(file_inventory, total_size):
+        print("Skipped — no files downloaded.")
+        return
+
+    print(f"\nDownloading {len(file_inventory)} file(s) into {LINKED_FILES_DIR}/...")
+    downloaded = 0
+    failed = 0
+    for fid, meta in file_inventory.items():
+        local_path = _local_path_for_file(meta, folder_paths)
+        if _download_file(meta, local_path):
+            entry = index["linked_files"][str(fid)]
+            entry.update({
+                "filename": meta.get("filename"),
+                "display_name": meta.get("display_name"),
+                "size": meta.get("size"),
+                "content_type": meta.get("content_type"),
+                "url": meta.get("url"),
+                "folder": folder_paths.get(meta.get("folder_id"), ""),
+                "local_path": str(local_path),
+                "updated_at": meta.get("updated_at"),
+            })
+            _vprint(f"  [ok] {local_path} ({_format_size(meta.get('size'))})")
+            downloaded += 1
+        else:
+            print(f"  [FAILED] file {fid} — could not download")
+            failed += 1
+
+    _save_index(index)
+    print(f"\nDownloaded {downloaded}/{len(file_inventory)} file(s). {failed} failed.")
+
+
+def cmd_find_file(pattern: str) -> None:
+    """Read-only fuzzy search of Canvas Files for a pattern. Prints matches; modifies nothing."""
+    _check_env()
+    matches = _search_files(CANVAS_COURSE_ID, pattern)
+
+    if not matches:
+        print(f"No files match '{pattern}'.")
+        return
+
+    # Cross-reference with linked_files to mark which are linked vs orphan
+    index = _load_index()
+    linked_ids = {int(fid) for fid in index.get("linked_files", {}).keys()}
+
+    print(f"Found {len(matches)} file(s) matching '{pattern}':\n")
+    print(f"  {'STATUS':<8} {'SIZE':<10} {'NAME':<40} ID")
+    for m in matches:
+        fid = m.get("id")
+        is_linked = fid in linked_ids
+        status = "linked" if is_linked else "orphan?"
+        name = (m.get("display_name") or m.get("filename") or "?")[:40]
+        size = _format_size(m.get("size"))
+        print(f"  {status:<8} {size:<10} {name:<40} {fid}")
+
+    print(f"\n('orphan?' status is preliminary — run course_quality_check.py --files for the full audit.)")
+
+
+def cmd_pull_file(pattern: str) -> None:
+    """Interactive: search Canvas Files for pattern, prompt user to pick, download selected."""
+    _check_env()
+    matches = _search_files(CANVAS_COURSE_ID, pattern)
+
+    if not matches:
+        print(f"No files match '{pattern}'.")
+        return
+
+    print(f"Found {len(matches)} file(s) matching '{pattern}':\n")
+    for i, m in enumerate(matches, start=1):
+        name = m.get("display_name") or m.get("filename", "?")
+        size = _format_size(m.get("size"))
+        print(f"  [{i}] {name}  ({size})  id={m.get('id')}")
+
+    try:
+        choice = input(f"\nDownload which? [1-{len(matches)} | 'all' | 'q' to cancel]: ").strip().lower()
+    except (EOFError, KeyboardInterrupt):
+        return
+
+    if choice in ("q", "", "n"):
+        return
+
+    selected = []
+    if choice == "all":
+        selected = matches
+    else:
+        try:
+            i = int(choice)
+            if 1 <= i <= len(matches):
+                selected = [matches[i - 1]]
+        except ValueError:
+            print("Unrecognized input.")
+            return
+
+    if not selected:
+        print("No selection.")
+        return
+
+    folders = _get(f"/courses/{CANVAS_COURSE_ID}/folders", params={"per_page": 100})
+    folder_paths = {f["id"]: f.get("full_name", "") for f in (folders if isinstance(folders, list) else [])}
+
+    index = _load_index()
+    if "linked_files" not in index:
+        index["linked_files"] = {}
+
+    for meta in selected:
+        local_path = _local_path_for_file(meta, folder_paths)
+        if _download_file(meta, local_path):
+            fid = meta.get("id")
+            index["linked_files"][str(fid)] = {
+                "canvas_file_id": fid,
+                "filename": meta.get("filename"),
+                "display_name": meta.get("display_name"),
+                "size": meta.get("size"),
+                "content_type": meta.get("content_type"),
+                "url": meta.get("url"),
+                "folder": folder_paths.get(meta.get("folder_id"), ""),
+                "local_path": str(local_path),
+                "updated_at": meta.get("updated_at"),
+                "referenced_by": index["linked_files"].get(str(fid), {}).get("referenced_by", []),
+            }
+            print(f"  [ok] {local_path}")
+        else:
+            print(f"  [FAILED] {meta.get('display_name', meta.get('id'))}")
+
+    _save_index(index)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1429,6 +1770,19 @@ Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
                         help="Canvas folder to upload into (default: course_assets)")
     parser.add_argument("--quiet", action="store_true", help="Suppress per-file output; show only headers and totals")
 
+    # File-aware pulling (issue #16) — separate, opt-in commands
+    parser.add_argument("--pull-files", action="store_true",
+                        help="Download referenced Canvas files into course/_files/ "
+                             "(requires --pull to have been run first to populate the linked_files map)")
+    parser.add_argument("--find-file", metavar="PATTERN",
+                        help="Read-only fuzzy search of Canvas Files by filename/display_name")
+    parser.add_argument("--pull-file", metavar="PATTERN",
+                        help="Interactive: search Canvas Files, pick, download selected")
+    parser.add_argument("--max-file-size", metavar="SIZE",
+                        help="Skip individual files larger than this (e.g. 100mb, 1gb)")
+    parser.add_argument("--max-total-size", metavar="SIZE",
+                        help="Abort --pull-files if total scanned size exceeds this")
+
     args = parser.parse_args()
 
     if args.quiet:
@@ -1446,5 +1800,14 @@ Change log:  .canvas/push_log.md  (appended on every --push and --pull <path>)
         cmd_build()
     elif args.upload:
         cmd_upload(args.upload, args.folder)
+    elif args.pull_files:
+        cmd_pull_files(
+            max_file_size=_parse_size(args.max_file_size),
+            max_total_size=_parse_size(args.max_total_size),
+        )
+    elif args.find_file:
+        cmd_find_file(args.find_file)
+    elif args.pull_file:
+        cmd_pull_file(args.pull_file)
     else:
         parser.print_help()
