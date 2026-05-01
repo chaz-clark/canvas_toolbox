@@ -79,7 +79,7 @@ If you see `"type": "teacher"` or `"type": "admin"` in enrollments, you have wri
 ## Phase 4 — Pull the Source Course
 
 ```bash
-uv run python tools/canvas_sync.py --init
+uv run python lib/tools/canvas_sync.py --init
 ```
 
 This mirrors the live Canvas course into `course/` — modules, pages, assignments, quizzes, discussions, syllabus. It also builds `.canvas/index.json` with all content IDs and hashes.
@@ -100,8 +100,8 @@ cat course/_course.json | python3 -m json.tool | grep -E '"name"|"start_at"|"end
 ## Phase 5 — Pull Master and Blueprint (if using three-course architecture)
 
 ```bash
-uv run python tools/course_mirror.py --pull        # map master item IDs
-uv run python tools/blueprint_sync.py --pull       # mirror blueprint + build ID mapping
+uv run python lib/tools/course_mirror.py --pull        # map master item IDs
+uv run python lib/tools/blueprint_sync.py --pull       # mirror blueprint + build ID mapping
 ```
 
 `course_mirror --pull` does not change any files — it reads the master course and maps its item IDs for use in future pushes.
@@ -115,7 +115,7 @@ uv run python tools/blueprint_sync.py --pull       # mirror blueprint + build ID
 Run the quality auditor against your source course before making any changes:
 
 ```bash
-uv run python tools/course_quality_check.py
+uv run python lib/tools/course_quality_check.py
 ```
 
 Review `quality_report.md`. Common issues in a fresh course:
@@ -129,7 +129,7 @@ Review `quality_report.md`. Common issues in a fresh course:
 
 Fix `auto_fixable` items with:
 ```bash
-uv run python tools/course_quality_check.py --fix
+uv run python lib/tools/course_quality_check.py --fix
 ```
 
 Items in `manual_review` (NewQuiz, ExternalTool, unpublished items with date issues) must be fixed in the Canvas UI.
@@ -160,19 +160,19 @@ Once the course is pulled and clean, your standard editing loop is:
 
 ```bash
 # Before editing
-uv run python tools/canvas_sync.py --status        # confirm no pending local changes
+uv run python lib/tools/canvas_sync.py --status        # confirm no pending local changes
 
 # Edit files in course/ using any text editor or Claude Code
 
 # After editing
-uv run python tools/canvas_sync.py --push          # push changed files to Canvas
-uv run python tools/course_quality_check.py        # verify no new issues introduced
-uv run python tools/canvas_sync.py --pull --quiet  # refresh metadata
+uv run python lib/tools/canvas_sync.py --push          # push changed files to Canvas
+uv run python lib/tools/course_quality_check.py        # verify no new issues introduced
+uv run python lib/tools/canvas_sync.py --pull --quiet  # refresh metadata
 ```
 
 **Never edit Canvas directly while you have local changes.** If someone edits Canvas directly:
 ```bash
-uv run python tools/canvas_sync.py --pull          # accept Canvas edits (answer y to confirm)
+uv run python lib/tools/canvas_sync.py --pull          # accept Canvas edits (answer y to confirm)
 ```
 
 ---

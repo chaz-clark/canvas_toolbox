@@ -3,7 +3,7 @@
 ## Agent Instructions
 1. Read this file for mission, principles, quickstart, and pitfalls.
 2. Parse `canvas_schedule_auditor.json` for tool definitions, scheduling rule schema, date calculation patterns, and validation cases.
-3. The course mirror is `tools/canvas_sync.py`. Use `--pull` to refresh before auditing. Local state is the source of truth.
+3. The course mirror is `lib/tools/canvas_sync.py`. Use `--pull` to refresh before auditing. Local state is the source of truth.
 4. Setup notes live at `course_src/<module>/setup-notes-and-course-settings.md` (Sprint 3 artifact). If missing, fall back to Canvas pull or infer-from-dates mode.
 
 ---
@@ -144,12 +144,12 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 | Tool / File | Purpose | When to use |
 |---|---|---|
-| `tools/canvas_sync.py --pull` | Refreshes `course/` and `course_src/` from Canvas | Run before every audit to ensure local state is current |
-| `tools/canvas_sync.py --push` | Pushes corrected local `.json` files to Canvas | After applying date corrections locally |
+| `lib/tools/canvas_sync.py --pull` | Refreshes `course/` and `course_src/` from Canvas | Run before every audit to ensure local state is current |
+| `lib/tools/canvas_sync.py --push` | Pushes corrected local `.json` files to Canvas | After applying date corrections locally |
 | `.canvas/index.json` | Module structure, item types, canvas IDs, current dates | Primary source for auditing — contains `due_at`, `lock_at`, `unlock_at` per item |
 | `course_src/*/setup-notes-and-course-settings.md` | Markdown mirror of the setup notes page | Primary rule source for the auditor |
 | `course/_course.json` | Course-level settings including `start_at` and `end_at` | Source for semester window — use these dates to build the week calendar |
-| `tools/canvas_api_tool.py` | Canvas write functions (assignments, quizzes, modules) | Reference for correct API patterns before writing |
+| `lib/tools/canvas_api_tool.py` | Canvas write functions (assignments, quizzes, modules) | Reference for correct API patterns before writing |
 
 **Reuse-first rule**: Do not write new Canvas API call code. All date update patterns are in `canvas_schedule_auditor.json → api_patterns`. Reference `canvas_api_tool.py` for any pattern not covered there.
 
@@ -159,7 +159,7 @@ For structured data — rule schema, API patterns, test cases — see `canvas_sc
 
 ### Prerequisites
 - `.env` configured with `CANVAS_API_TOKEN`, `CANVAS_BASE_URL`, `CANVAS_COURSE_ID`
-- Course pulled locally: `uv run python tools/canvas_sync.py --pull`
+- Course pulled locally: `uv run python lib/tools/canvas_sync.py --pull`
 - Setup notes page exists in Canvas (unpublished is fine — the agent can read it)
 - Semester start date (Week 1 Monday) confirmed by instructor
 
@@ -174,7 +174,7 @@ If the course has no setup notes page, the auditor cannot audit. Options:
 
 **Step 1: Pull fresh state**
 ```bash
-uv run python tools/canvas_sync.py --pull
+uv run python lib/tools/canvas_sync.py --pull
 ```
 
 **Step 2: Invoke the auditor**
@@ -188,8 +188,8 @@ Confirm all, a subset, or none. The agent applies only approved corrections.
 
 **Step 5: Verify**
 ```bash
-uv run python tools/canvas_sync.py --pull --quiet
-uv run python tools/course_quality_check.py
+uv run python lib/tools/canvas_sync.py --pull --quiet
+uv run python lib/tools/course_quality_check.py
 ```
 
 ---
@@ -226,7 +226,7 @@ uv run python tools/course_quality_check.py
 
 **Why it happens**: Canvas was edited directly (not via `--push`) and `--pull` was not run before the audit.
 
-**Solution**: Always run `uv run python tools/canvas_sync.py --pull` before auditing. The agent should check the `last_pull` timestamp in `index.json` and warn if it's more than 24 hours old.
+**Solution**: Always run `uv run python lib/tools/canvas_sync.py --pull` before auditing. The agent should check the `last_pull` timestamp in `index.json` and warn if it's more than 24 hours old.
 
 ### 5. Applying Corrections to the Wrong Course
 
@@ -313,7 +313,7 @@ uv run python tools/course_quality_check.py
 See `canvas_schedule_auditor.json → validation` for full test cases including: week calendar edge cases, multi-week sprint handling, infer mode detection, null field handling, and cross-course comparison against known DS 250 dates.
 
 ### Regression Guard
-After any correction run, re-run `uv run python tools/canvas_sync.py --pull` and re-run the auditor. The audit table should show 100% OK. If new flags appear, the correction introduced drift — investigate before proceeding.
+After any correction run, re-run `uv run python lib/tools/canvas_sync.py --pull` and re-run the auditor. The audit table should show 100% OK. If new flags appear, the correction introduced drift — investigate before proceeding.
 
 ---
 
@@ -332,8 +332,8 @@ After any correction run, re-run `uv run python tools/canvas_sync.py --pull` and
 
 ### Agent Files
 - **`canvas_schedule_auditor.json`**: Tool definitions, scheduling rule schema, date patterns, API endpoints, validation cases
-- **`tools/canvas_sync.py`**: Course mirror — use `--pull` before auditing, `--push` after corrections
-- **`tools/canvas_api_tool.py`**: Canvas write patterns for assignments, quizzes, modules
+- **`lib/tools/canvas_sync.py`**: Course mirror — use `--pull` before auditing, `--push` after corrections
+- **`lib/tools/canvas_api_tool.py`**: Canvas write patterns for assignments, quizzes, modules
 
 ### Setup Notes Examples
 - **`course_ref/setup_notes_examples/ds_339374_setup_notes.md`**: DS 250 filled-in example — best reference for rule format

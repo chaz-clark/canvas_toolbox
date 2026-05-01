@@ -23,21 +23,26 @@ A Canvas LMS course management toolkit — mirrors live Canvas courses to local 
 
 ```
 canvas_toolbox/
-├── agents/                ← agent specs, knowledge references, templates
-│   ├── canvas_*.md/.json
-│   ├── knowledge/         ← instructional-design references (see knowledge/README.md)
-│   ├── templates/         ← reusable HTML/JSON artifacts (see templates/README.md)
-│   └── AGENT_LAYERS.md    ← runtime / capability / specification taxonomy
-├── tools/                 ← Python CLI scripts (uv run python)
-│   ├── canvas_sync.py
-│   ├── sync_context.sh    ← multi-course wrapper
-│   ├── blueprint_sync.py
-│   ├── course_mirror.py
-│   ├── course_quality_check.py
-│   ├── canvas_quiz_questions.py
-│   └── canvas_api_tool.py
-├── tests/                 ← regression tests (pytest)
-├── course_ref/            ← local-only artifacts safe from --pull (answer keys, drafts, setup notes)
+├── lib/                   ← pull-safe toolkit code — always updated by git pull, never edit in place
+│   ├── agents/            ← agent specs, knowledge references, templates
+│   │   ├── canvas_*.md/.json
+│   │   ├── knowledge/     ← instructional-design references (see knowledge/README.md)
+│   │   ├── templates/     ← reusable HTML/JSON artifacts (see templates/README.md)
+│   │   └── AGENT_LAYERS.md ← runtime / capability / specification taxonomy
+│   ├── tools/             ← Python CLI scripts (uv run python canvas_toolbox/lib/tools/<script>)
+│   │   ├── canvas_sync.py
+│   │   ├── sync_context.sh ← multi-course wrapper
+│   │   ├── blueprint_sync.py
+│   │   ├── course_mirror.py
+│   │   ├── course_quality_check.py
+│   │   ├── canvas_quiz_questions.py
+│   │   └── canvas_api_tool.py
+│   └── tests/             ← regression tests (pytest)
+├── scaffold/              ← copy-once starters for your course repo (copy to your repo root, then own them)
+│   ├── gitignore          ← rename to .gitignore in your course repo
+│   └── .env.example       ← copy to .env and fill in credentials + course IDs
+├── examples/              ← reference material (read-only — never auto-synced)
+│   └── setup_notes/       ← example instructor setup notes
 ├── course_src/            ← markdown authoring workspace (gitignored, --build compiles to course/)
 ├── make_ai_agents/        ← local clone of upstream tool (gitignored, separate dev tool)
 ├── gh_issues_agent/       ← local clone of upstream tool (gitignored, separate dev tool)
@@ -50,7 +55,9 @@ canvas_toolbox/
 └── README.md              ← user-facing documentation and command reference
 ```
 
-For full setup and command reference, see [`README.md`](README.md). For agent-engineering taxonomy (Runtime / Capability / Specification / Tool layers), see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
+**Consumer usage**: clone `canvas_toolbox` as a subdirectory of your course repo (`git clone https://github.com/chaz-clark/canvas_toolbox.git canvas_toolbox`). Copy `scaffold/` starters to your repo root once. Run tools as `uv run python canvas_toolbox/lib/tools/<script>`. Update safely at any time: `cd canvas_toolbox && git pull origin main` — only `lib/`, `scaffold/`, and `examples/` change; your course files are untouched.
+
+For full setup and command reference, see [`README.md`](README.md). For agent-engineering taxonomy (Runtime / Capability / Specification / Tool layers), see [`lib/agents/AGENT_LAYERS.md`](lib/agents/AGENT_LAYERS.md).
 
 ## Working Style
 
@@ -79,10 +86,10 @@ _Last updated: 2026-04-30_
   - `course_quality_check.py --alignment` (Course Outcome → Module Outcome → Rubric Criterion chain audit, read-only; #18)
   All three are mode-switching CLI flags — each runs alone. canvas_toolbox issue tracker is now empty.
 - **v0.5.0** — Course Design Language as the 8th knowledge framework, with the `byui_course_design/` template-set (11 HTML components + canonical rubric JSON)
-- **v0.4.0 multi-course orchestration** in production — `tools/sync_context.sh` invokes `canvas_sync.py` per context (master/blueprint/s1/s2/...). Validated against a real multi-section course setup.
+- **v0.4.0 multi-course orchestration** in production — `lib/tools/sync_context.sh` invokes `canvas_sync.py` per context (master/blueprint/s1/s2/...). Validated against a real multi-section course setup.
 - **Make-AI-Agents subtree** at `make_ai_agents/` is gitignored. Populate locally with the subtree-add command in Existing Tooling when needed.
 - **Open canvas_toolbox issues**: none. The #16/#17/#18 backlog shipped in v0.6.0–v0.8.0; ready for empirical validation against real courses.
-- **Roadmap (canvas_toolbox)**: convert `canvas_course_expert` to deployable `.agents/skills/canvas-audit/` (first deployable skill, parameterize for non-BYUI institutions); capture conversion as `agents/deploy_agent.md`; convert `canvas_schedule_auditor` to validate the template; cite `toyota-way-agents` skill from AGENTS.md once it lands upstream and gets subtree'd.
+- **Roadmap (canvas_toolbox)**: convert `canvas_course_expert` to deployable `.agents/skills/canvas-audit/` (first deployable skill, parameterize for non-BYUI institutions); capture conversion as `lib/agents/deploy_agent.md`; convert `canvas_schedule_auditor` to validate the template; cite `toyota-way-agents` skill from AGENTS.md once it lands upstream and gets subtree'd.
 - **Upstream-tracked work** lives in [`Make-AI-Agents`](https://github.com/chaz-clark/Make-AI-Agents) (separate repo, separate issue tracker). Toyota Way × AI agents skill design + subtree consumer hygiene live there.
 
 Vision: another university clones this repo, opens it in any modern AI coding tool, and the canvas-audit capability is auto-discovered by their LLM — zero install friction beyond clone-and-open.
@@ -123,20 +130,20 @@ Before generating new sync or audit code, check whether these already do what's 
 
 | Tool | Purpose | When to use |
 |---|---|---|
-| `tools/canvas_sync.py` | Single-course mirror (pull, status, push, build, upload). Plus opt-in: `--pull-files` / `--find-file <q>` / `--pull-file <q>` for working with referenced Canvas Files | All single-course sync work |
-| `tools/sync_context.sh <context>` | Multi-course wrapper — invokes `canvas_sync.py` for master / blueprint / s1 / s2 / ... | Anytime more than one course is in this repo |
-| `tools/blueprint_sync.py` | Master → Blueprint sync (one-way overwrite, content + dates + completion requirements) | Online programs using Canvas Blueprint |
-| `tools/course_mirror.py` | Source → Master one-off mirror | Manually replicating between two courses |
-| `tools/course_quality_check.py` | Three opt-in audit modes (mode-switching, not combined): structural (default — duplicates, floating items, empty modules, date window), `--files` (orphans + broken refs + duplicates), `--alignment` (Course Outcome → Module Outcome → Rubric Criterion chain breaks) | After every push to any course; `--files` and `--alignment` on demand for cleanup/design audits |
-| `tools/canvas_quiz_questions.py` | Classic quiz question manager (push, list, clear) | Editing quiz questions outside Canvas UI |
-| `tools/canvas_api_tool.py` | Audit engine + Canvas write functions | Wrapped by audit agents; rarely invoked directly |
-| `agents/canvas_course_expert` | 8-framework instructional-design audit | Conceptual / pedagogical audit |
-| `agents/canvas_schedule_auditor` | Rule-based date audit (propose-before-execute) | Pre-semester or mid-semester date validation |
-| `agents/canvas_blueprint_sync` / `canvas_content_sync` | Agent guides for sync workflows | Reference, not invoked directly |
-| `agents/canvas_semester_setup` | Roll due dates forward for a new semester | Once per semester |
-| `agents/canvas_new_course_setup` | First-time setup walkthrough | Once per new course adoption |
+| `lib/tools/canvas_sync.py` | Single-course mirror (pull, status, push, build, upload). Plus opt-in: `--pull-files` / `--find-file <q>` / `--pull-file <q>` for working with referenced Canvas Files | All single-course sync work |
+| `lib/tools/sync_context.sh <context>` | Multi-course wrapper — invokes `canvas_sync.py` for master / blueprint / s1 / s2 / ... | Anytime more than one course is in this repo |
+| `lib/tools/blueprint_sync.py` | Master → Blueprint sync (one-way overwrite, content + dates + completion requirements) | Online programs using Canvas Blueprint |
+| `lib/tools/course_mirror.py` | Source → Master one-off mirror | Manually replicating between two courses |
+| `lib/tools/course_quality_check.py` | Three opt-in audit modes (mode-switching, not combined): structural (default — duplicates, floating items, empty modules, date window), `--files` (orphans + broken refs + duplicates), `--alignment` (Course Outcome → Module Outcome → Rubric Criterion chain breaks) | After every push to any course; `--files` and `--alignment` on demand for cleanup/design audits |
+| `lib/tools/canvas_quiz_questions.py` | Classic quiz question manager (push, list, clear) | Editing quiz questions outside Canvas UI |
+| `lib/tools/canvas_api_tool.py` | Audit engine + Canvas write functions | Wrapped by audit agents; rarely invoked directly |
+| `lib/agents/canvas_course_expert` | 8-framework instructional-design audit | Conceptual / pedagogical audit |
+| `lib/agents/canvas_schedule_auditor` | Rule-based date audit (propose-before-execute) | Pre-semester or mid-semester date validation |
+| `lib/agents/canvas_blueprint_sync` / `canvas_content_sync` | Agent guides for sync workflows | Reference, not invoked directly |
+| `lib/agents/canvas_semester_setup` | Roll due dates forward for a new semester | Once per semester |
+| `lib/agents/canvas_new_course_setup` | First-time setup walkthrough | Once per new course adoption |
 
-For framework theory (CLT / Hattie / etc.), see [`agents/knowledge/README.md`](agents/knowledge/README.md). For the agent abstraction taxonomy, see [`agents/AGENT_LAYERS.md`](agents/AGENT_LAYERS.md).
+For framework theory (CLT / Hattie / etc.), see [`lib/agents/knowledge/README.md`](lib/agents/knowledge/README.md). For the agent abstraction taxonomy, see [`lib/agents/AGENT_LAYERS.md`](lib/agents/AGENT_LAYERS.md).
 
 **Populating the gitignored upstream tool clones** (each is a normal local git clone — independent of canvas_toolbox's git history):
 

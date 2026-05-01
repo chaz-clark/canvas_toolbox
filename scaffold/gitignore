@@ -1,0 +1,29 @@
+# canvas_toolbox — clone at this path (plain git clone, not submodule or subtree)
+# Update with: cd canvas_toolbox && git pull origin main
+canvas_toolbox/
+
+# Canvas course mirrors — populated by canvas_toolbox tools
+course/
+blueprint_course/
+course_src/
+
+# Canvas ID indexes and push logs — course-specific, never committed
+.canvas/
+
+# Secrets and local config
+.env
+
+# AI coding tool personal overlays — per-user, not shared
+CLAUDE.md
+.claude/cache/
+.cursor/
+.gemini/
+.aider*
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# macOS
+.DS_Store

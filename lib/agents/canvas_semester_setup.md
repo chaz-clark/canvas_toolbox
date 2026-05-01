@@ -72,7 +72,7 @@ The dbt Demo 3 assignment (canvas_id: 16858423) is due Monday of Week 9 (first d
 
 ### Prerequisites
 - `.env` file with `CANVAS_API_TOKEN`, `CANVAS_BASE_URL`, `CANVAS_COURSE_ID`
-- `.canvas/index.json` up to date (run `uv run python tools/canvas_sync.py --init` if stale)
+- `.canvas/index.json` up to date (run `uv run python lib/tools/canvas_sync.py --init` if stale)
 - Instructor confirms: semester name, Week 1 Monday start date, last day of semester
 
 ### Input Required
@@ -92,7 +92,7 @@ Last day: 2026-07-22
 
 | Tool / File | Purpose | When to use |
 |---|---|---|
-| `tools/canvas_sync.py --init` | Rebuilds `.canvas/index.json` from live Canvas | Run if index is stale (before semester setup) |
+| `lib/tools/canvas_sync.py --init` | Rebuilds `.canvas/index.json` from live Canvas | Run if index is stale (before semester setup) |
 | `.canvas/index.json` → `modules[]` items | Source of all assignment canvas_ids and current dates | Read at start to discover all items |
 | `canvas_semester_setup.json` → `week_assignment_map` | Week number for each canvas_id | Use to compute due date per item |
 | `course/setup-notes-and-course-settings` (page_url) | Course-specific week structure and timing rules | Read to confirm rules before computing |
@@ -168,7 +168,7 @@ After pushing all updates, verify:
 
 ### Agent Files
 - `canvas_semester_setup.json` — week assignment map, skip list, API patterns
-- `tools/canvas_sync.py` — `--init` rebuilds index with current dates
+- `lib/tools/canvas_sync.py` — `--init` rebuilds index with current dates
 - `.canvas/index.json` — current due_at for all assignments (after --init)
 - `course/setup-notes-and-course-settings` (Canvas page, page_url: `setup-notes-and-course-settings`) — authoritative week structure
 

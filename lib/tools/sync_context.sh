@@ -6,14 +6,14 @@
 # course_src/, and .canvas/ — fully isolated from other contexts.
 #
 # Usage:
-#   tools/sync_context.sh <context> [canvas_sync.py args...]
+#   lib/tools/sync_context.sh <context> [canvas_sync.py args...]
 #
 # Examples:
-#   tools/sync_context.sh master --pull
-#   tools/sync_context.sh blueprint --pull
-#   tools/sync_context.sh s1 --status
-#   tools/sync_context.sh s2 --push "sprint-1"
-#   tools/sync_context.sh master --build
+#   lib/tools/sync_context.sh master --pull
+#   lib/tools/sync_context.sh blueprint --pull
+#   lib/tools/sync_context.sh s1 --status
+#   lib/tools/sync_context.sh s2 --push "sprint-1"
+#   lib/tools/sync_context.sh master --build
 #
 # Context → .env variable mapping:
 #   master    → MASTER_COURSE_ID
@@ -32,11 +32,11 @@
 
 set -euo pipefail
 
-# Resolve repo root (parent of this script's directory)
+# Resolve repo root (grandparent of this script: lib/tools/ → lib/ → root)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ENV_FILE="$REPO_ROOT/.env"
-SYNC_SCRIPT="$REPO_ROOT/tools/canvas_sync.py"
+SYNC_SCRIPT="$REPO_ROOT/lib/tools/canvas_sync.py"
 
 # --- Validate environment ---
 

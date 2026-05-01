@@ -3,7 +3,7 @@
 ## Agent Instructions
 1. Read this for mission, workflow, and pitfalls.
 2. Parse `canvas_blueprint_sync.json` for endpoint schemas, field maps, and validation data.
-3. This agent is Python-first — the heavy lifting is done by `tools/blueprint_sync.py`. The agent role is to orchestrate, validate, and report.
+3. This agent is Python-first — the heavy lifting is done by `lib/tools/blueprint_sync.py`. The agent role is to orchestrate, validate, and report.
 
 ---
 
@@ -96,10 +96,10 @@
 
 | Tool | Purpose | When to use |
 |---|---|---|
-| `tools/blueprint_sync.py --pull` | Full init: mirrors blueprint into `blueprint_course/`, builds mapping with IDs + dates | Before every push; required on first run and after module changes |
-| `tools/blueprint_sync.py --push` | Full overwrite: master content + dates → blueprint | After any master course update |
-| `tools/blueprint_sync.py --status` | Shows mapping coverage + date coverage | Before push, to confirm coverage |
-| `tools/canvas_sync.py --status` | Confirms master is fully synced | Before blueprint sync |
+| `lib/tools/blueprint_sync.py --pull` | Full init: mirrors blueprint into `blueprint_course/`, builds mapping with IDs + dates | Before every push; required on first run and after module changes |
+| `lib/tools/blueprint_sync.py --push` | Full overwrite: master content + dates → blueprint | After any master course update |
+| `lib/tools/blueprint_sync.py --status` | Shows mapping coverage + date coverage | Before push, to confirm coverage |
+| `lib/tools/canvas_sync.py --status` | Confirms master is fully synced | Before blueprint sync |
 | `blueprint_course/` | Read-only mirror of current blueprint state (like `course/` for master) | Reference / comparison |
 | `.canvas/blueprint_index.json` | master filepath → blueprint canvas ID + date mapping | Read-only reference |
 | `.canvas/blueprint_log.md` | Append-only audit trail | Review after push |
@@ -108,16 +108,16 @@
 
 ```bash
 # 1. Confirm master is clean
-uv run python tools/canvas_sync.py --status
+uv run python lib/tools/canvas_sync.py --status
 
 # 2. Pull blueprint structure (build/refresh mapping)
-uv run python tools/blueprint_sync.py --pull
+uv run python lib/tools/blueprint_sync.py --pull
 
 # 3. Check coverage
-uv run python tools/blueprint_sync.py --status
+uv run python lib/tools/blueprint_sync.py --status
 
 # 4. Sync
-uv run python tools/blueprint_sync.py --push
+uv run python lib/tools/blueprint_sync.py --push
 ```
 
 ---
@@ -226,7 +226,7 @@ Blueprint may have semester-specific dates from when it was first created (or ol
 
 ### Agent Files
 - **`canvas_blueprint_sync.json`**: API schemas, field maps, validation checklists
-- **`tools/blueprint_sync.py`**: Python implementation (source of truth for behavior)
+- **`lib/tools/blueprint_sync.py`**: Python implementation (source of truth for behavior)
 
 ### Related Agents
 - `canvas_content_sync` — pushes individual content changes to master
@@ -247,7 +247,7 @@ Blueprint may have semester-specific dates from when it was first created (or ol
 | **Output** | Blueprint course updated in Canvas + `blueprint_course/` mirror + `blueprint_log.md` entry |
 | **Agent Type** | Python-first, agent orchestrates |
 | **Complexity** | simple |
-| **Key Files** | `tools/blueprint_sync.py`, `.canvas/blueprint_index.json` |
+| **Key Files** | `lib/tools/blueprint_sync.py`, `.canvas/blueprint_index.json` |
 | **Quickstart** | `--pull` then `--push` |
 | **Common Pitfall** | Stale mapping after Blueprint module changes — re-run `--pull` |
 | **Dependencies** | `requests`, `python-dotenv`, `BLUEPRINT_COURSE_ID` in `.env` |

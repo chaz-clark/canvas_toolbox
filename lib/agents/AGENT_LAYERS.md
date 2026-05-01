@@ -168,8 +168,8 @@ When you (in Claude Code) run the Canvas course audit in this repo right now, al
 | Layer | What plays this role |
 |---|---|
 | **Runtime** | Claude Code itself — the LLM in a reasoning loop, picking next steps |
-| **Capability** | Currently: the Python CLI scripts in `tools/`. Future: `.agents/skills/canvas-audit/` |
-| **Specification** | `agents/canvas_course_expert.md` + `.json` — load these and Claude becomes the audit agent |
+| **Capability** | Currently: the Python CLI scripts in `lib/tools/`. Future: `.agents/skills/canvas-audit/` |
+| **Specification** | `lib/agents/canvas_course_expert.md` + `.json` — load these and Claude becomes the audit agent |
 | **Tool / function** | `parse_course_export()`, `analyze_cognitive_load()`, `canvas_api()` etc. — invoked from the runtime |
 
 The Roadmap in [`AGENTS.md`](../AGENTS.md#roadmap) describes the migration: extract the audit capability from the Python CLI tools layer up into a deployable Skill (Layer 2), so any runtime — not just Claude Code — can invoke it.

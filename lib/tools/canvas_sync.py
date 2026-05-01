@@ -508,6 +508,8 @@ def cmd_init():
     # Course metadata + Syllabus
     course = _get(f"/courses/{course_id}?include[]=syllabus_body")
     COURSE_DIR.mkdir(exist_ok=True)
+    COURSE_SRC_DIR.mkdir(exist_ok=True)
+    Path("course_ref").mkdir(exist_ok=True)
 
     # Late policy
     late_policy_resp = _get(f"/courses/{course_id}/late_policy")

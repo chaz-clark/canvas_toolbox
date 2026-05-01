@@ -10,10 +10,11 @@ Built for BYU-Idaho instructors. Works with any Canvas institution.
 
 **1. Install**
 ```bash
-git clone <this-repo>
-cd <repo>
-uv sync
-cp .env.example .env
+mkdir my-course && cd my-course
+git clone https://github.com/chaz-clark/canvas_toolbox.git canvas_toolbox
+cd canvas_toolbox && uv sync && cd ..
+cp canvas_toolbox/scaffold/.env.example .env
+cp canvas_toolbox/scaffold/gitignore .gitignore
 ```
 
 **2. Add your credentials to `.env`**
@@ -28,7 +29,7 @@ CANVAS_COURSE_ID=123456
 
 **3. Pull your course**
 ```bash
-uv run python tools/canvas_sync.py --init
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --init
 ```
 
 This mirrors your entire Canvas course into a local `course/` folder — all modules, pages, assignments, quizzes, discussions, and the syllabus.
@@ -36,67 +37,69 @@ This mirrors your entire Canvas course into a local `course/` folder — all mod
 **4. Check what you have**
 ```bash
 ls course/                           # one folder per module
-uv run python tools/course_quality_check.py   # audit for issues
+uv run python canvas_toolbox/lib/tools/course_quality_check.py   # audit for issues
 ```
 
 **5. Edit locally, push to Canvas**
 ```bash
 # Edit any file in course/ with a text editor
-uv run python tools/canvas_sync.py --status  # see what changed
-uv run python tools/canvas_sync.py --push    # push changes to Canvas
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --status  # see what changed
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --push    # push changes to Canvas
 ```
 
 That's the core loop. Everything else builds on it.
 
 ---
 
-## Using canvas_toolbox as an upstream for course repos
+## Using canvas_toolbox in a course repo
 
-The common pattern: each Canvas course gets its own git repo (for that semester's `course/` state, CLAUDE.md, answer keys, etc.), and pulls **scripts and agents** from canvas_toolbox as an upstream. This keeps tooling in sync across many courses while each course owns its own content.
+The standard pattern: each Canvas course gets its own git repo, and canvas_toolbox lives inside it as a plain clone under `canvas_toolbox/`. This keeps tooling in sync across many courses while each course owns its own content — and a `git pull` inside the clone only touches toolkit files, never yours.
 
-### Initial setup (in the downstream course repo)
-
-```bash
-git remote add upstream https://github.com/chaz-clark/canvas_toolbox.git
-git fetch upstream
-```
-
-### Pulling updates from upstream
-
-**Do not use `git pull upstream main`.** The two repos have unrelated histories and different content. Instead, cherry-pick just the files canvas_toolbox owns:
+### Initial setup (in your course repo)
 
 ```bash
-git fetch upstream
-git checkout upstream/main -- tools/ agents/ .env.example .gitignore README.md
-git status                              # review the changes
-git commit -m "sync canvas_toolbox upstream"
+# Clone canvas_toolbox as a subdirectory
+git clone https://github.com/chaz-clark/canvas_toolbox.git canvas_toolbox
+
+# Copy the starter files to your repo root (once — then own them)
+cp canvas_toolbox/scaffold/.env.example .env
+cp canvas_toolbox/scaffold/gitignore .gitignore   # rename to .gitignore
+
+# Fill in your credentials and course ID
+nano .env
 ```
 
-Run this any time you want the latest tooling. Safe to re-run — `course/`, `.env`, `CLAUDE.md`, and everything in `.canvas/` are untouched.
+Add `canvas_toolbox/` to your `.gitignore` (already included in `scaffold/gitignore`).
 
-**Why not `--allow-unrelated-histories`:** that permanently fuses the two repos' histories. From then on every pull drags in *all* of canvas_toolbox's commits, including ones you don't want. The selective checkout above is the intended workflow, not a workaround.
+### Pulling toolkit updates
 
-### What upstream owns vs. what the course repo owns
+```bash
+cd canvas_toolbox
+git pull origin main
+cd ..
+```
 
-| Upstream (canvas_toolbox)     | Course repo                            |
-|-------------------------------|----------------------------------------|
-| `tools/` (Python scripts)     | `course/` (live course mirror)         |
-| `agents/` (agent guides)      | `.env` (credentials, course IDs)       |
-| `.env.example`                | `CLAUDE.md` (course-specific context)  |
-| `.gitignore`                  | `course_ref/` (local-only artifacts)   |
-| `README.md`                   | `.canvas/` (per-course indexes)        |
+That's it. Only files under `canvas_toolbox/` change. Your `course/`, `.env`, `CLAUDE.md`, and everything else at your repo root are untouched.
+
+### What canvas_toolbox owns vs. what your course repo owns
+
+| canvas_toolbox (always pull)          | Your course repo (never in canvas_toolbox) |
+|---------------------------------------|--------------------------------------------|
+| `lib/tools/` (Python scripts)         | `course/` (live course mirror)             |
+| `lib/agents/` (agent guides)          | `.env` (credentials, course IDs)           |
+| `lib/tests/` (regression tests)       | `CLAUDE.md` (course-specific context)      |
+| `scaffold/` (copy-once starters)      | `course_ref/` (local-only artifacts)       |
+| `examples/` (reference notes)         | `.canvas/` (per-course indexes)            |
 
 ### Pushing improvements back upstream
 
-If you improve a script or agent and want the fix to reach other courses, push it to canvas_toolbox directly — don't try to push from a downstream course repo.
+If you fix a script or agent and want it to reach other courses, push it to canvas_toolbox directly:
 
 ```bash
-# in the canvas_toolbox repo
-git checkout main
-# make the same edit here
-git commit -m "..."
+cd canvas_toolbox
+# make the edit here, commit, then:
 git push origin main
-# then in each course repo, run the sync command above
+# then in each other course repo: cd canvas_toolbox && git pull origin main
 ```
 
 ---
@@ -161,12 +164,12 @@ If you only have one course, just use `canvas_sync.py` and ignore the rest.
 ## canvas_sync.py — course mirror
 
 ```bash
-uv run python tools/canvas_sync.py --pull            # pull full course into course/
-uv run python tools/canvas_sync.py --pull --quiet    # same, suppress per-file output
-uv run python tools/canvas_sync.py --status          # show local changes not yet pushed
-uv run python tools/canvas_sync.py --push            # push all local changes to Canvas
-uv run python tools/canvas_sync.py --push "sprint-1" # push one module only
-uv run python tools/canvas_sync.py --push syllabus   # push syllabus only
+uv run python lib/tools/canvas_sync.py --pull            # pull full course into course/
+uv run python lib/tools/canvas_sync.py --pull --quiet    # same, suppress per-file output
+uv run python lib/tools/canvas_sync.py --status          # show local changes not yet pushed
+uv run python lib/tools/canvas_sync.py --push            # push all local changes to Canvas
+uv run python lib/tools/canvas_sync.py --push "sprint-1" # push one module only
+uv run python lib/tools/canvas_sync.py --push syllabus   # push syllabus only
 ```
 
 **Sync order:** always `--status` before `--push`. Don't push without knowing what changed.
@@ -189,19 +192,19 @@ Every `--pull` automatically scans content for `/courses/X/files/N` references a
 
 ```bash
 # After --pull has populated linked_files, download the referenced files
-uv run python tools/canvas_sync.py --pull-files
+uv run python lib/tools/canvas_sync.py --pull-files
 
 # Read-only fuzzy search — find files in Canvas by name, no download
-uv run python tools/canvas_sync.py --find-file "rubric"
+uv run python lib/tools/canvas_sync.py --find-file "rubric"
 
 # Search + interactive picker — pick from matches, download selected
-uv run python tools/canvas_sync.py --pull-file "syllabus"
+uv run python lib/tools/canvas_sync.py --pull-file "syllabus"
 
 # Skip individual files larger than threshold (e.g. 100mb, 1gb)
-uv run python tools/canvas_sync.py --pull-files --max-file-size 100mb
+uv run python lib/tools/canvas_sync.py --pull-files --max-file-size 100mb
 
 # Abort if total download size exceeds threshold
-uv run python tools/canvas_sync.py --pull-files --max-total-size 500mb
+uv run python lib/tools/canvas_sync.py --pull-files --max-total-size 500mb
 ```
 
 Files land at `course/_files/<canvas-folder-path>/<filename>`. Each linked_files entry gets enriched with `filename`, `display_name`, `size`, `folder`, `url`, `content_type`, `local_path`.
@@ -221,9 +224,9 @@ Bypass the prompt for CI: `CANVAS_SYNC_NO_PROMPT=1`.
 ## blueprint_sync.py — master → blueprint
 
 ```bash
-uv run python tools/blueprint_sync.py --pull     # mirror blueprint into blueprint_course/ + build mapping
-uv run python tools/blueprint_sync.py --status   # show mapping + date coverage
-uv run python tools/blueprint_sync.py --push     # sync master content + dates → blueprint
+uv run python lib/tools/blueprint_sync.py --pull     # mirror blueprint into blueprint_course/ + build mapping
+uv run python lib/tools/blueprint_sync.py --status   # show mapping + date coverage
+uv run python lib/tools/blueprint_sync.py --push     # sync master content + dates → blueprint
 ```
 
 Syncs: settings, homepage, syllabus, all mapped pages/assignments/quizzes/discussions (with dates), module published state, item completion requirements, sprint prerequisite chain.
@@ -241,11 +244,11 @@ Three opt-in audit modes — each runs alone (mode-switching, not combined). Out
 Issues that cause student problems:
 
 ```bash
-uv run python tools/course_quality_check.py              # check source course
-uv run python tools/course_quality_check.py --master     # check master
-uv run python tools/course_quality_check.py --blueprint  # check blueprint
-uv run python tools/course_quality_check.py --all        # all three
-uv run python tools/course_quality_check.py --all --fix  # auto-fix duplicates
+uv run python lib/tools/course_quality_check.py              # check source course
+uv run python lib/tools/course_quality_check.py --master     # check master
+uv run python lib/tools/course_quality_check.py --blueprint  # check blueprint
+uv run python lib/tools/course_quality_check.py --all        # all three
+uv run python lib/tools/course_quality_check.py --all --fix  # auto-fix duplicates
 ```
 
 **Checks:**
@@ -259,9 +262,9 @@ uv run python tools/course_quality_check.py --all --fix  # auto-fix duplicates
 Surfaces what Canvas's Files UI hides. Cross-references `index["linked_files"]` (built by `canvas_sync.py --pull`) against `GET /courses/:id/files`.
 
 ```bash
-uv run python tools/course_quality_check.py --files            # source course
-uv run python tools/course_quality_check.py --files --master   # master
-uv run python tools/course_quality_check.py --files --all      # all three
+uv run python lib/tools/course_quality_check.py --files            # source course
+uv run python lib/tools/course_quality_check.py --files --master   # master
+uv run python lib/tools/course_quality_check.py --files --all      # all three
 ```
 
 **Three findings:**
@@ -281,9 +284,9 @@ Output also includes top-N orphans by size for cleanup prioritization. **Read-on
 Walks Course Design Language Principle 6: **Course Outcome → Module Outcome → Rubric Criterion → Activity.** Flags breaks in the chain.
 
 ```bash
-uv run python tools/course_quality_check.py --alignment            # source course
-uv run python tools/course_quality_check.py --alignment --master   # master
-uv run python tools/course_quality_check.py --alignment --all      # all three
+uv run python lib/tools/course_quality_check.py --alignment            # source course
+uv run python lib/tools/course_quality_check.py --alignment --master   # master
+uv run python lib/tools/course_quality_check.py --alignment --all      # all three
 ```
 
 **Three break categories:**
@@ -305,9 +308,9 @@ Outcomes are extracted from `course/syllabus.html` and per-module overview pages
 Manages questions for classic Canvas quizzes (not NewQuiz) from a local JSON file:
 
 ```bash
-uv run python tools/canvas_quiz_questions.py --push course/.../quiz.questions.json  # idempotent
-uv run python tools/canvas_quiz_questions.py --list course/.../quiz.questions.json  # read-only
-uv run python tools/canvas_quiz_questions.py --clear course/.../quiz.questions.json # delete all
+uv run python lib/tools/canvas_quiz_questions.py --push course/.../quiz.questions.json  # idempotent
+uv run python lib/tools/canvas_quiz_questions.py --list course/.../quiz.questions.json  # read-only
+uv run python lib/tools/canvas_quiz_questions.py --clear course/.../quiz.questions.json # delete all
 ```
 
 **Question file format** (`*.questions.json`):
@@ -339,7 +342,7 @@ Note: `canvas_quiz_id` and `course_id` are course-specific — the same quiz has
 ## canvas_api_tool.py — structural auditor
 
 ```bash
-uv run python tools/canvas_api_tool.py --test    # smoke tests, no credentials needed
+uv run python lib/tools/canvas_api_tool.py --test    # smoke tests, no credentials needed
 ```
 
 Scores your course against a stack of instructional-design frameworks:
@@ -354,7 +357,7 @@ Scores your course against a stack of instructional-design frameworks:
 | **Designer Thinking** | Backward design — Outcome → Evidence → Experience → Content → Reality Check |
 | **Toyota Gap Analysis** | Change-plan format — Current State → Target State → Gap → Root Cause → Countermeasure → Verification |
 
-Full descriptions and when-to-use guidance: [`agents/knowledge/README.md`](agents/knowledge/README.md).
+Full descriptions and when-to-use guidance: [`lib/agents/knowledge/README.md`](lib/agents/knowledge/README.md).
 
 ---
 
@@ -418,15 +421,15 @@ Module naming: `Sprint X: Topic (WXX–WXX)` or `Week X: Topic`.
 
 | File | Purpose |
 |------|---------|
-| `tools/canvas_sync.py` | Source course mirror |
-| `tools/blueprint_sync.py` | Master → Blueprint sync |
-| `tools/course_mirror.py` | Source → Master mirror |
-| `tools/course_quality_check.py` | Course health auditor |
-| `tools/canvas_quiz_questions.py` | Classic quiz question manager |
-| `tools/canvas_api_tool.py` | Cognitive load auditor + Canvas write functions |
-| `agents/canvas_blueprint_sync.md/.json` | Blueprint sync agent guide + API schema |
-| `agents/canvas_course_expert.md/.json` | Audit agent guide + rules |
-| `agents/canvas_content_sync.md/.json` | Content sync agent guide |
-| `agents/knowledge/` | Instructional-design knowledge references (CLT, Hattie, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis) — see [`agents/knowledge/README.md`](agents/knowledge/README.md) |
+| `lib/tools/canvas_sync.py` | Source course mirror |
+| `lib/tools/blueprint_sync.py` | Master → Blueprint sync |
+| `lib/tools/course_mirror.py` | Source → Master mirror |
+| `lib/tools/course_quality_check.py` | Course health auditor |
+| `lib/tools/canvas_quiz_questions.py` | Classic quiz question manager |
+| `lib/tools/canvas_api_tool.py` | Cognitive load auditor + Canvas write functions |
+| `lib/agents/canvas_blueprint_sync.md/.json` | Blueprint sync agent guide + API schema |
+| `lib/agents/canvas_course_expert.md/.json` | Audit agent guide + rules |
+| `lib/agents/canvas_content_sync.md/.json` | Content sync agent guide |
+| `lib/agents/knowledge/` | Instructional-design knowledge references (CLT, Hattie, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis) — see [`lib/agents/knowledge/README.md`](lib/agents/knowledge/README.md) |
 | `course/` | Live course mirror — source of truth |
 | `AGENTS.md` | Cross-tool project context — auto-loaded by Antigravity, Cursor, VS Code Copilot, Codex, Claude Code (fallback), Aider |

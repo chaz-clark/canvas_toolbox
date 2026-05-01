@@ -4,6 +4,9 @@ version = "0.8.1"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.14"
+
+[tool.pytest.ini_options]
+testpaths = ["lib/tests"]
 dependencies = [
     "anthropic>=0.93.0",
     "beautifulsoup4>=4.14.3",

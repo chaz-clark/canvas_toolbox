@@ -53,7 +53,7 @@ def sandbox_env():
 def sandbox_pull(sandbox_env, tmp_path_factory):
     """Run a full --pull against the sandbox once per session. Returns index."""
     result = subprocess.run(
-        [sys.executable, "tools/canvas_sync.py", "--pull", "--quiet"],
+        [sys.executable, "lib/tools/canvas_sync.py", "--pull", "--quiet"],
         env=sandbox_env,
         capture_output=True,
         text=True,

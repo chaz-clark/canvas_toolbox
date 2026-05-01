@@ -50,8 +50,11 @@ __pycache__/
 .DS_Store
 knowledge/medium_draft_*.md
 
-# Raw source materials distilled into agents/knowledge/ — local only
-agents/pre_knowledge/
+# Raw source materials distilled into lib/agents/knowledge/ — local only
+lib/agents/pre_knowledge/
+
+# Local-only artifacts (answer keys, drafts, notes) — created by --pull, never committed
+course_ref/
 
 # Local Agent to Agent Handoff files — local only
 handoffs/

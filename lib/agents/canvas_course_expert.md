@@ -3,7 +3,7 @@
 ## Agent Instructions
 1. Read this for mission, principles, quickstart, and pitfalls.
 2. Parse `canvas_course_expert.json` for structured data, tool definitions, validation, and API mappings.
-3. The Python tool script is `tools/canvas_api_tool.py` — it handles all file I/O and Canvas REST calls.
+3. The Python tool script is `lib/tools/canvas_api_tool.py` — it handles all file I/O and Canvas REST calls.
 4. `canvas_sync.py` is the course mirror tool — use it to read the live course state from `course/`. This is the only supported way to read course content. `.imscc` export parsing is deprecated.
 
 ---
@@ -89,7 +89,7 @@ For tool definitions and API endpoint mappings, see `canvas_course_expert.json`.
 
 **Why**: Canvas API responses are large — a full module listing with all item metadata can be thousands of tokens. Write operations via MCP return the full updated resource in the response. When applying 10+ changes across a course, MCP write traffic alone can consume most of the context window before reasoning can continue. Python scripts call the API and return only what matters (success/fail + the new resource ID).
 
-**How**: Read operations (`GET`) go through MCP — they happen once per session during the "build change plan" phase. Write operations (`POST`, `PUT`) go through Python functions in `tools/canvas_api_tool.py` that call the API directly and return only a summary: `{success, resource_id, status_code}`. The persistent index (`.canvas/index.json`) stores all returned IDs so MCP reads are minimized in future sessions.
+**How**: Read operations (`GET`) go through MCP — they happen once per session during the "build change plan" phase. Write operations (`POST`, `PUT`) go through Python functions in `lib/tools/canvas_api_tool.py` that call the API directly and return only a summary: `{success, resource_id, status_code}`. The persistent index (`.canvas/index.json`) stores all returned IDs so MCP reads are minimized in future sessions.
 
 ### 6. Low Temperature for API Operations
 **Description**: The agent runs at temperature 0.1 during tool-use phases (audit, API calls) and can be set higher (0.5) during recommendation narrative generation.
@@ -224,19 +224,19 @@ cp .env.example .env
 
 ```bash
 # First time: pull the full course into course/
-uv run python tools/canvas_sync.py --init
+uv run python lib/tools/canvas_sync.py --init
 
 # See what you've changed locally
-uv run python tools/canvas_sync.py --status
+uv run python lib/tools/canvas_sync.py --status
 
 # Push local edits to Canvas
-uv run python tools/canvas_sync.py --push
+uv run python lib/tools/canvas_sync.py --push
 
 # Push one module only
-uv run python tools/canvas_sync.py --push "sprint-2-api-dag"
+uv run python lib/tools/canvas_sync.py --push "sprint-2-api-dag"
 
 # Accept a direct Canvas edit (Canvas → local)
-uv run python tools/canvas_sync.py --pull course/sprint-1-setup-dag-demo/sprint-1-overview.html
+uv run python lib/tools/canvas_sync.py --pull course/sprint-1-setup-dag-demo/sprint-1-overview.html
 ```
 
 **Folder structure after init:**
@@ -361,7 +361,7 @@ Applying C-001: Creating Sprint 5 Overview...
   create_page() → 200 OK, slug: sprint-5-overview-dbt-stage-test-and-warehouse-w09-w10
   insert_module_item() → 200 OK, module_item_id: 44555090
 Change ledger saved. 1/1 changes applied.
-Run: uv run python tools/canvas_sync.py --status to confirm index is current.
+Run: uv run python lib/tools/canvas_sync.py --status to confirm index is current.
 ```
 
 ### Example 3: Checking What Changed Since Last Push
@@ -370,7 +370,7 @@ Run: uv run python tools/canvas_sync.py --status to confirm index is current.
 
 **Input**:
 ```bash
-uv run python tools/canvas_sync.py --status
+uv run python lib/tools/canvas_sync.py --status
 ```
 
 **Output**:
@@ -477,7 +477,7 @@ See `canvas_course_expert.json` → `validation.test_cases` for:
 | **Agent Type** | `llm_agent` |
 | **Complexity** | complex |
 | **Key Files** | `canvas_course_expert.json`, `canvas_api_tool.py` |
-| **Quickstart** | `uv run python tools/canvas_sync.py --init` then audit via `analyze_cognitive_load()` |
+| **Quickstart** | `uv run python lib/tools/canvas_sync.py --init` then audit via `analyze_cognitive_load()` |
 | **Common Pitfall** | Applying changes to a live course without checking enrollment dates |
 | **Temperature** | 0.1 (tool use) / 0.5 (recommendation narrative) |
 | **Dependencies** | `canvasapi`, `lxml`, `requests`, `beautifulsoup4`, `anthropic` |
