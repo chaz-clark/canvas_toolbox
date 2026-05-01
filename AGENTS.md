@@ -73,10 +73,15 @@ For the full principles and override rules, see `knowledge/behavioral_discipline
 
 _Last updated: 2026-04-30_
 
-- **v0.5.0 just shipped** — Course Design Language as the 8th knowledge framework, with the `byui_course_design/` template-set (11 HTML components + canonical rubric JSON)
+- **v0.6.0 / 0.7.0 / 0.8.0 just shipped** — three independent opt-in audit/sync features:
+  - `canvas_sync.py --pull-files` / `--find-file` / `--pull-file` (file-aware pulling, fuzzy search, pre-download confirmation thresholds; #16)
+  - `course_quality_check.py --files` (orphan + broken-reference + duplicate audit, read-only; #17)
+  - `course_quality_check.py --alignment` (Course Outcome → Module Outcome → Rubric Criterion chain audit, read-only; #18)
+  All three are mode-switching CLI flags — each runs alone. canvas_toolbox issue tracker is now empty.
+- **v0.5.0** — Course Design Language as the 8th knowledge framework, with the `byui_course_design/` template-set (11 HTML components + canonical rubric JSON)
 - **v0.4.0 multi-course orchestration** in production — `tools/sync_context.sh` invokes `canvas_sync.py` per context (master/blueprint/s1/s2/...). Validated against a real multi-section course setup.
 - **Make-AI-Agents subtree** at `make_ai_agents/` is gitignored. Populate locally with the subtree-add command in Existing Tooling when needed.
-- **Open canvas_toolbox issues**: [#16](https://github.com/chaz-clark/canvas_toolbox/issues/16) (file-aware pulling + fuzzy search), [#17](https://github.com/chaz-clark/canvas_toolbox/issues/17) (orphan/broken-reference audit), [#18](https://github.com/chaz-clark/canvas_toolbox/issues/18) (alignment-chain audit). All bigger features; no current pain.
+- **Open canvas_toolbox issues**: none. The #16/#17/#18 backlog shipped in v0.6.0–v0.8.0; ready for empirical validation against real courses.
 - **Roadmap (canvas_toolbox)**: convert `canvas_course_expert` to deployable `.agents/skills/canvas-audit/` (first deployable skill, parameterize for non-BYUI institutions); capture conversion as `agents/deploy_agent.md`; convert `canvas_schedule_auditor` to validate the template; cite `toyota-way-agents` skill from AGENTS.md once it lands upstream and gets subtree'd.
 - **Upstream-tracked work** lives in [`Make-AI-Agents`](https://github.com/chaz-clark/Make-AI-Agents) (separate repo, separate issue tracker). Toyota Way × AI agents skill design + subtree consumer hygiene live there.
 
@@ -118,11 +123,11 @@ Before generating new sync or audit code, check whether these already do what's 
 
 | Tool | Purpose | When to use |
 |---|---|---|
-| `tools/canvas_sync.py` | Single-course mirror (pull, status, push, build, upload) | All single-course sync work |
+| `tools/canvas_sync.py` | Single-course mirror (pull, status, push, build, upload). Plus opt-in: `--pull-files` / `--find-file <q>` / `--pull-file <q>` for working with referenced Canvas Files | All single-course sync work |
 | `tools/sync_context.sh <context>` | Multi-course wrapper — invokes `canvas_sync.py` for master / blueprint / s1 / s2 / ... | Anytime more than one course is in this repo |
 | `tools/blueprint_sync.py` | Master → Blueprint sync (one-way overwrite, content + dates + completion requirements) | Online programs using Canvas Blueprint |
 | `tools/course_mirror.py` | Source → Master one-off mirror | Manually replicating between two courses |
-| `tools/course_quality_check.py` | Audit for duplicates, floating items, empty modules, dates outside the course window | After every push to any course |
+| `tools/course_quality_check.py` | Three opt-in audit modes (mode-switching, not combined): structural (default — duplicates, floating items, empty modules, date window), `--files` (orphans + broken refs + duplicates), `--alignment` (Course Outcome → Module Outcome → Rubric Criterion chain breaks) | After every push to any course; `--files` and `--alignment` on demand for cleanup/design audits |
 | `tools/canvas_quiz_questions.py` | Classic quiz question manager (push, list, clear) | Editing quiz questions outside Canvas UI |
 | `tools/canvas_api_tool.py` | Audit engine + Canvas write functions | Wrapped by audit agents; rarely invoked directly |
 | `agents/canvas_course_expert` | 8-framework instructional-design audit | Conceptual / pedagogical audit |

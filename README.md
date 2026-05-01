@@ -105,10 +105,10 @@ git push origin main
 
 | Tool | Purpose |
 |------|---------|
-| `canvas_sync.py` | Mirror a Canvas course into a local `course/` folder. Pull, edit, push. |
+| `canvas_sync.py` | Mirror a Canvas course into a local `course/` folder. Pull, edit, push. Optionally pull referenced files and fuzzy-search Canvas Files. |
 | `blueprint_sync.py` | One-way sync from master → Blueprint course (for semester rollouts) |
 | `course_mirror.py` | One-off mirror between any two courses by title-matching |
-| `course_quality_check.py` | Audit any course for duplicates, floating published items, empty modules, and date issues |
+| `course_quality_check.py` | Audit any course — three opt-in modes: structural (default), files (orphans + broken refs), alignment (outcome → rubric chain) |
 | `canvas_quiz_questions.py` | Manage classic Canvas quiz questions from a local JSON file |
 | `canvas_api_tool.py` | Cognitive load + Hattie 3-phase course auditor |
 
@@ -183,6 +183,39 @@ uv run python tools/canvas_sync.py --push syllabus   # push syllabus only
 
 **Not pulled:** gradebook, submissions, student data.
 
+### File-aware commands (opt-in)
+
+Every `--pull` automatically scans content for `/courses/X/files/N` references and writes a reverse map at `index["linked_files"]`. The map is free — it's just a regex scan, no extra API calls. Three opt-in commands then work with that map:
+
+```bash
+# After --pull has populated linked_files, download the referenced files
+uv run python tools/canvas_sync.py --pull-files
+
+# Read-only fuzzy search — find files in Canvas by name, no download
+uv run python tools/canvas_sync.py --find-file "rubric"
+
+# Search + interactive picker — pick from matches, download selected
+uv run python tools/canvas_sync.py --pull-file "syllabus"
+
+# Skip individual files larger than threshold (e.g. 100mb, 1gb)
+uv run python tools/canvas_sync.py --pull-files --max-file-size 100mb
+
+# Abort if total download size exceeds threshold
+uv run python tools/canvas_sync.py --pull-files --max-total-size 500mb
+```
+
+Files land at `course/_files/<canvas-folder-path>/<filename>`. Each linked_files entry gets enriched with `filename`, `display_name`, `size`, `folder`, `url`, `content_type`, `local_path`.
+
+**Pre-download confirmation:**
+
+| Total scanned size | Behavior |
+|---|---|
+| < 50 MB | Silent — auto-proceed |
+| 50 MB – 1 GB | Prompt with summary + top 5 largest |
+| > 1 GB | Prompt with full list before proceeding |
+
+Bypass the prompt for CI: `CANVAS_SYNC_NO_PROMPT=1`.
+
 ---
 
 ## blueprint_sync.py — master → blueprint
@@ -201,23 +234,69 @@ Syncs: settings, homepage, syllabus, all mapped pages/assignments/quizzes/discus
 
 ## course_quality_check.py — course auditor
 
-Checks any course for issues that cause student problems:
+Three opt-in audit modes — each runs alone (mode-switching, not combined). Output: `quality_report.md` at repo root + `.canvas/<audit-type>_*.json` for machine-readable.
+
+### Default — structural audit
+
+Issues that cause student problems:
 
 ```bash
 uv run python tools/course_quality_check.py              # check source course
 uv run python tools/course_quality_check.py --master     # check master
 uv run python tools/course_quality_check.py --blueprint  # check blueprint
-uv run python tools/course_quality_check.py --all        # all three → quality_report.md
+uv run python tools/course_quality_check.py --all        # all three
 uv run python tools/course_quality_check.py --all --fix  # auto-fix duplicates
 ```
 
-**What it checks:**
+**Checks:**
 - Duplicate assignment groups, assignments, quizzes, module items
 - Published items not linked in any module (students cannot find these)
 - Empty modules (sync artifact when all items are NewQuiz/ExternalTool)
 - Due/lock/unlock dates outside the course date window
 
-**Report:** `quality_report.md` at repo root (gitignored — regenerate on demand).
+### `--files` — files audit
+
+Surfaces what Canvas's Files UI hides. Cross-references `index["linked_files"]` (built by `canvas_sync.py --pull`) against `GET /courses/:id/files`.
+
+```bash
+uv run python tools/course_quality_check.py --files            # source course
+uv run python tools/course_quality_check.py --files --master   # master
+uv run python tools/course_quality_check.py --files --all      # all three
+```
+
+**Three findings:**
+
+| Finding | What it is |
+|---|---|
+| **Orphans** | Files in Canvas but not referenced from any synced content |
+| **Broken references** | File IDs referenced from content but file deleted from Canvas |
+| **Likely duplicates** | Files with same display_name, different IDs |
+
+Output also includes top-N orphans by size for cleanup prioritization. **Read-only — no Canvas writes.** A future `--delete-orphans` flag is intentionally NOT in scope until the audit has run against real courses for a semester to calibrate false-positive rate.
+
+**Caveat:** orphan classification is only as reliable as canvas_sync's content scan. Files referenced from surfaces canvas_sync doesn't deeply scan (New Quiz item bodies, rubric long_descriptions, gradebook custom columns) will be falsely flagged as orphans. Verify before acting.
+
+### `--alignment` — alignment-chain audit
+
+Walks Course Design Language Principle 6: **Course Outcome → Module Outcome → Rubric Criterion → Activity.** Flags breaks in the chain.
+
+```bash
+uv run python tools/course_quality_check.py --alignment            # source course
+uv run python tools/course_quality_check.py --alignment --master   # master
+uv run python tools/course_quality_check.py --alignment --all      # all three
+```
+
+**Three break categories:**
+
+| Break | Meaning |
+|---|---|
+| **Course outcomes with no rubric** | Course-level outcome that no assessment evidences |
+| **Rubric criteria with no outcome** | Criterion the rubric grades on but no upstream outcome justifies |
+| **Module outcomes with no rubric** | Module-level outcome with no rubric coverage |
+
+Heuristic text-based matching (token-set overlap, threshold ≥ 2 shared significant tokens). False positives expected — treat output as a starting point for instructor review, not a list of bugs to fix.
+
+Outcomes are extracted from `course/syllabus.html` and per-module overview pages by looking for headers containing "outcome" / "objective" / "goal" followed by a list. Rubric criteria come from `GET /assignments/:id?include[]=rubric` (works with student tokens, unlike the `/rubrics` endpoint).
 
 ---
 
