@@ -111,7 +111,7 @@ git push origin main
 | `canvas_sync.py` | Mirror a Canvas course into a local `course/` folder. Pull, edit, push. Optionally pull referenced files and fuzzy-search Canvas Files. |
 | `blueprint_sync.py` | One-way sync from master → Blueprint course (for semester rollouts) |
 | `course_mirror.py` | One-off mirror between any two courses by title-matching |
-| `course_quality_check.py` | Audit any course — three opt-in modes: structural (default), files (orphans + broken refs), alignment (outcome → rubric chain) |
+| `course_quality_check.py` | Audit any course — four opt-in modes: structural (default), `--files` (orphans + broken refs), `--alignment` (outcome → rubric chain), `--validate-dates` (window, ordering, duplicates, label drift) |
 | `canvas_quiz_questions.py` | Manage classic Canvas quiz questions from a local JSON file |
 | `canvas_api_tool.py` | Cognitive load + Hattie 3-phase course auditor |
 
@@ -237,7 +237,7 @@ Syncs: settings, homepage, syllabus, all mapped pages/assignments/quizzes/discus
 
 ## course_quality_check.py — course auditor
 
-Three opt-in audit modes — each runs alone (mode-switching, not combined). Output: `quality_report.md` at repo root + `.canvas/<audit-type>_*.json` for machine-readable.
+Four opt-in audit modes — each runs alone (mode-switching, not combined). Output: `quality_report.md` at repo root + `.canvas/<audit-type>_*.json` for machine-readable.
 
 ### Default — structural audit
 
@@ -300,6 +300,27 @@ uv run python lib/tools/course_quality_check.py --alignment --all      # all thr
 Heuristic text-based matching (token-set overlap, threshold ≥ 2 shared significant tokens). False positives expected — treat output as a starting point for instructor review, not a list of bugs to fix.
 
 Outcomes are extracted from `course/syllabus.html` and per-module overview pages by looking for headers containing "outcome" / "objective" / "goal" followed by a list. Rubric criteria come from `GET /assignments/:id?include[]=rubric` (works with student tokens, unlike the `/rubrics` endpoint).
+
+### `--validate-dates` — date validation
+
+Catches date problems that cause student confusion or fail silently. **Read-only — no Canvas writes.**
+
+```bash
+uv run python lib/tools/course_quality_check.py --validate-dates            # source course
+uv run python lib/tools/course_quality_check.py --validate-dates --master   # master
+uv run python lib/tools/course_quality_check.py --validate-dates --all      # all three
+```
+
+**Four checks:**
+
+| Check | What it catches |
+|---|---|
+| **Out-of-window** | Any `due_at`, `lock_at`, or `unlock_at` (or discussion `todo_date`) outside the course date window |
+| **Ordering sanity** | `lock_at` before `due_at` (students lose access before the deadline); `unlock_at` after `due_at` (item unlocks after it's already due) |
+| **Duplicate due dates in group** | Two or more items in the same assignment group sharing the same due date |
+| **Label-vs-week/sprint drift** | Items named "Week N" or "SN" whose due date falls in a different week or sprint of the course |
+
+Exits non-zero when findings exist — safe to run in CI. All timestamps compared in UTC; findings within 24 hours of a window boundary may be timezone artifacts. Sprint drift assumes 2-week sprints.
 
 ---
 
