@@ -8,6 +8,8 @@ Audits a degree program's curriculum map to ensure every Program Learning Outcom
 - `outcomes_quality_knowledge.md` — CLO quality criteria (AoL rubric, Bloom's verb table, outcome hierarchy)
 - `three_domains_knowledge.md` / `taxonomy_explorer_knowledge.md` — domain coverage and verb classification
 - `toyota_gap_analysis_knowledge.md` — A3 format for all findings
+- `inverted_blooms_knowledge.md` — AI agency levels; Assess-level CLOs should require student-owned evidence, not submittable artifacts
+- `designer_thinking_knowledge.md` — backward design check: does the IRA chain structure suggest PLOs were defined before courses, or assigned after?
 
 ---
 
@@ -62,6 +64,11 @@ Generate a health-check summary immediately after intake. Do not wait for user d
 - Are I-courses earlier in the sequence (lower course number / earlier semester) than A-courses?
 - Are any A-courses listed as prerequisites for I-courses? (inversion)
 
+**Designer Thinking check** (from `designer_thinking_knowledge.md`):
+- Does the IRA chain structure suggest PLOs were defined first (backward design) — I-courses are introductory, A-courses are capstone or upper-division?
+- Or does the assignment look like PLOs were added after the course sequence was built (forward design) — same course assigned as I, R, and A; A-courses early in the program; no logical scaffolding progression?
+- Flag `design_mode: teacher` patterns as a risk factor for the program.
+
 Present as a table: PLO | I courses | R courses | A courses | Flags
 
 Close Phase 2 with: *"Based on this map, which PLO would you like to audit at the CLO level first?"*
@@ -77,6 +84,7 @@ For the chosen PLO, work through each I, R, and A course **one at a time**:
    - Single-barreled? (flag multi-goal CLOs)
    - Appropriate Bloom's level for the IRA role? (see Taxonomy Progression below)
    - Vertically aligned? (does the verb + content actually support the PLO?)
+   - For Assess-level CLOs: apply the AI agency check (from `inverted_blooms_knowledge.md`) — does the CLO require student-owned evidence, or could the deliverable be satisfied by an AI-generated artifact? Flag `ai_dependent` outcomes at the Assess level as a structural risk.
 4. Store the CLO and move to the next course.
 
 **Taxonomy Progression Check** — apply to every PLO's IRA chain:

@@ -1,340 +1,347 @@
 # Canvas Course Toolkit
 
-A Python toolkit for managing Canvas LMS courses as code. Mirror course content locally, sync across multiple courses (source → master → blueprint), audit structure, and manage quiz questions — all via the Canvas REST API.
+A set of tools that lets you manage your Canvas course like a document — pull it down to your computer, make changes, push it back. Your course structure becomes auditable, reviewable, and fixable without living in the Canvas UI.
 
-Built for BYU-Idaho instructors. Works with any Canvas institution.
+Built at BYU-Idaho, designed for all instructors. Works with any Canvas institution.
 
 ---
 
-## Quick Start
+# What you can do with it
 
-**1. Install**
+- **Keep your course in sync** — pull your Canvas course to a local folder, edit content in any text editor, push changes back
+- **Catch problems before students do** — audit for broken module structure, items students can't find, and empty modules
+- **Validate your dates** — check that due dates are in the right window, in the right order, and not accidentally duplicated
+- **Check your outcome chain** — see whether your course outcomes actually connect to what you're grading
+- **Find unused files** — surface files sitting in Canvas that nothing links to
+- **Roll out a new semester** — sync your master course to a Blueprint and let Canvas handle section distribution
+
+Full knowledge base and agent framework references: [`lib/agents/knowledge/README.md`](lib/agents/knowledge/README.md)
+
+---
+
+# Getting started
+
+Choose the path that fits your situation:
+
+---
+
+## Option A — Simplest: open in Antigravity (no terminal required)
+
+1. Go to [github.com/chaz-clark/canvas_toolbox](https://github.com/chaz-clark/canvas_toolbox), click the green **Code** button, then click **Download ZIP**
+2. Extract the ZIP to your course folder
+3. Open the extracted folder in Antigravity (or any AI coding tool — see the "Using with AI coding tools" section below)
+4. Ask the agent: *"Help me set up this toolkit for my Canvas course"*
+
+The agent reads the toolkit's setup instructions automatically and will ask you for what it needs as you go.
+
+---
+
+## Option B — With git: stays updatable
+
+Use this if you want to pull toolkit updates later with a single command. Requires a terminal.
+
+**Open a terminal:**
+- **Mac:** press Cmd + Space, type "Terminal", press Enter
+- **Windows:** press the Windows key, type "PowerShell", press Enter
+
+All commands below are typed into the terminal and run by pressing Enter.
+
+**Step 1 — Install uv** (it manages Python for you)
+
+Mac or Linux:
 ```bash
-mkdir my-course && cd my-course
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+Windows (PowerShell):
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+Close and reopen your terminal after installing.
+
+**Also needed: git** — already installed on Mac. Windows users: download [GitHub Desktop](https://desktop.github.com/), which installs git for you.
+
+**Step 2 — Download the toolkit**
+
+```bash
 git clone https://github.com/chaz-clark/canvas_toolbox.git canvas_toolbox
-cd canvas_toolbox && uv sync && cd ..
+```
+
+A `canvas_toolbox` folder will appear in your current directory.
+
+**Step 3 — Install dependencies**
+
+```bash
+cd canvas_toolbox
+uv sync
+cd ..
+```
+
+uv downloads everything the toolkit needs. This only runs once.
+
+**Step 4 — Create your configuration files**
+
+```bash
 cp canvas_toolbox/scaffold/.env.example .env
 cp canvas_toolbox/scaffold/gitignore .gitignore
 ```
 
-**2. Add your credentials to `.env`**
+This creates a `.env` file in your folder — you'll fill it in next.
+
+**Step 5 — Enter your Canvas credentials**
+
+You'll need three things before this step:
+- **Course ID:** open your Canvas course — it's the number in the URL after `/courses/`
+- **API token:** Canvas → Account → Settings → Approved Integrations → New Access Token (requires instructor or admin role)
+- **Institution URL:** your Canvas login address (e.g., `https://byui.instructure.com`)
+
+Open the `.env` file in a plain-text editor:
+- **Mac:** right-click the file → Open With → TextEdit
+- **Windows:** right-click the file → Open With → Notepad
+
+> **Can't see the `.env` file?** Its name starts with a dot, which hides it by default. **Mac:** press Cmd + Shift + . in Finder to show hidden files. **Windows:** in File Explorer, click View → check "Hidden items".
+
 ```
 CANVAS_API_TOKEN=your_token_here
-CANVAS_BASE_URL=https://your-institution.instructure.com
+CANVAS_BASE_URL=https://byui.instructure.com
 CANVAS_COURSE_ID=123456
 ```
 
-- **Course ID:** open your Canvas course — it's the number in the URL after `/courses/`
-- **API token:** Canvas → Account → Settings → Approved Integrations → New Access Token (requires instructor or admin role)
+Save and close the file.
 
-**3. Pull your course**
+**Step 6 — Pull your course into a local folder**
+
+**Ask your agent:** *"Pull my Canvas course into a local folder so I can start working with it"*
+
+Approve the run of:
 ```bash
 uv run python canvas_toolbox/lib/tools/canvas_sync.py --init
 ```
 
-This mirrors your entire Canvas course into a local `course/` folder — all modules, pages, assignments, quizzes, discussions, and the syllabus.
-
-**4. Check what you have**
-```bash
-ls course/                           # one folder per module
-uv run python canvas_toolbox/lib/tools/course_quality_check.py   # audit for issues
-```
-
-**5. Edit locally, push to Canvas**
-```bash
-# Edit any file in course/ with a text editor
-uv run python canvas_toolbox/lib/tools/canvas_sync.py --status  # see what changed
-uv run python canvas_toolbox/lib/tools/canvas_sync.py --push    # push changes to Canvas
-```
-
-That's the core loop. Everything else builds on it.
+This copies your entire Canvas course — all modules, pages, assignments, quizzes, discussions, and syllabus — into a `course/` folder on your computer. It may take a minute. When it finishes, you'll see the `course/` folder appear.
 
 ---
 
-## Using canvas_toolbox in a course repo
+## Option C — A colleague is setting it up for you
 
-The standard pattern: each Canvas course gets its own git repo, and canvas_toolbox lives inside it as a plain clone under `canvas_toolbox/`. This keeps tooling in sync across many courses while each course owns its own content — and a `git pull` inside the clone only touches toolkit files, never yours.
+You just need to gather three pieces of information and hand them over:
 
-### Initial setup (in your course repo)
+- **Course ID:** open your Canvas course — it's the number in the URL after `/courses/`
+- **API token:** Canvas → Account → Settings → Approved Integrations → New Access Token (requires instructor or admin role)
+- **Institution URL:** your Canvas login address (e.g., `https://byui.instructure.com`)
 
-```bash
-# Clone canvas_toolbox as a subdirectory
-git clone https://github.com/chaz-clark/canvas_toolbox.git canvas_toolbox
+Share them in this format:
 
-# Copy the starter files to your repo root (once — then own them)
-cp canvas_toolbox/scaffold/.env.example .env
-cp canvas_toolbox/scaffold/gitignore .gitignore   # rename to .gitignore
-
-# Fill in your credentials and course ID
-nano .env
 ```
-
-Add `canvas_toolbox/` to your `.gitignore` (already included in `scaffold/gitignore`).
-
-### Pulling toolkit updates
-
-```bash
-cd canvas_toolbox
-git pull origin main
-cd ..
-```
-
-That's it. Only files under `canvas_toolbox/` change. Your `course/`, `.env`, `CLAUDE.md`, and everything else at your repo root are untouched.
-
-### What canvas_toolbox owns vs. what your course repo owns
-
-| canvas_toolbox (always pull)          | Your course repo (never in canvas_toolbox) |
-|---------------------------------------|--------------------------------------------|
-| `lib/tools/` (Python scripts)         | `course/` (live course mirror)             |
-| `lib/agents/` (agent guides)          | `.env` (credentials, course IDs)           |
-| `lib/tests/` (regression tests)       | `CLAUDE.md` (course-specific context)      |
-| `scaffold/` (copy-once starters)      | `course_ref/` (local-only artifacts)       |
-| `examples/` (reference notes)         | `.canvas/` (per-course indexes)            |
-
-### Pushing improvements back upstream
-
-If you fix a script or agent and want it to reach other courses, push it to canvas_toolbox directly:
-
-```bash
-cd canvas_toolbox
-# make the edit here, commit, then:
-git push origin main
-# then in each other course repo: cd canvas_toolbox && git pull origin main
-```
-
----
-
-## What it does
-
-| Tool | Purpose |
-|------|---------|
-| `canvas_sync.py` | Mirror a Canvas course into a local `course/` folder. Pull, edit, push. Optionally pull referenced files and fuzzy-search Canvas Files. |
-| `blueprint_sync.py` | One-way sync from master → Blueprint course (for semester rollouts) |
-| `course_mirror.py` | One-off mirror between any two courses by title-matching |
-| `course_quality_check.py` | Audit any course — four opt-in modes: structural (default), `--files` (orphans + broken refs), `--alignment` (outcome → rubric chain), `--validate-dates` (window, ordering, duplicates, label drift) |
-| `canvas_quiz_questions.py` | Manage classic Canvas quiz questions from a local JSON file |
-| `canvas_api_tool.py` | Cognitive load + Hattie 3-phase course auditor |
-
-**Source of truth: your local `course/` folder.** Canvas is the delivery target.
-
----
-
-## Setup
-
-**Requirements:** Python 3.10+, [uv](https://docs.astral.sh/uv/)
-
-```bash
-git clone <this-repo>
-cd <repo>
-uv sync
-cp .env.example .env
-```
-
-**`.env` variables:**
-```
-CANVAS_API_TOKEN=your_token
+CANVAS_API_TOKEN=your_token_here
 CANVAS_BASE_URL=https://byui.instructure.com
-CANVAS_COURSE_ID=123456          # your working/source course
-MASTER_COURSE_ID=123457          # master template course (optional)
-BLUEPRINT_COURSE_ID=123458       # Canvas Blueprint course (optional)
+CANVAS_COURSE_ID=123456
 ```
 
-**Find your course ID:** open your Canvas course — it's the number in the URL after `/courses/`.
-
-**Generate an API token:** Canvas → Account → Settings → Approved Integrations → New Access Token. Requires instructor or admin role.
+They'll handle the rest.
 
 ---
 
-## Three-Course Architecture (optional)
-
-For courses that use Canvas Blueprints for semester rollout:
-
-```
-Source (CANVAS_COURSE_ID)   ← you edit this; course/ mirrors it
-       ↓ course_mirror.py
-Master (MASTER_COURSE_ID)   ← clean template
-       ↓ blueprint_sync.py
-Blueprint (BLUEPRINT_COURSE_ID) ← Canvas clones new sections from this
-```
-
-If you only have one course, just use `canvas_sync.py` and ignore the rest.
+From here, edit any file locally and push changes back to Canvas.
 
 ---
 
-## canvas_sync.py — course mirror
+# Auditing your course
 
+Four questions the audit tools can answer. All of them are read-only — they report findings but never change anything in your course. Run them as often as you like.
+
+**Not sure where to start?** Run the first one below.
+
+## "Are there items students can't find?"
+
+**Ask your agent:** *"Run the course quality check and tell me what it finds"*
+
+Approve the run of:
 ```bash
-uv run python lib/tools/canvas_sync.py --pull            # pull full course into course/
-uv run python lib/tools/canvas_sync.py --pull --quiet    # same, suppress per-file output
-uv run python lib/tools/canvas_sync.py --status          # show local changes not yet pushed
-uv run python lib/tools/canvas_sync.py --push            # push all local changes to Canvas
-uv run python lib/tools/canvas_sync.py --push "sprint-1" # push one module only
-uv run python lib/tools/canvas_sync.py --push syllabus   # push syllabus only
+uv run python canvas_toolbox/lib/tools/course_quality_check.py
 ```
 
-**Sync order:** always `--status` before `--push`. Don't push without knowing what changed.
+Checks for:
+- Items published but not linked to any module (students can't navigate to these)
+- Duplicate assignments, quizzes, or module items
+- Empty modules
+- Due dates outside the course date window
 
-### What gets pulled
+## "Are my dates going to confuse anyone?"
 
-| Type | Format | Editable |
-|------|--------|----------|
-| Pages | `.html` — body only | Yes |
-| Assignments | `.json` — description, points, due date | Yes |
-| Discussions | `.json` — title, body | Yes |
-| Quizzes | `.json` — description, metadata | Yes |
-| ExternalTool / SubHeader / ExternalUrl | `.json` — metadata only | No — manage in Canvas UI |
+**Ask your agent:** *"Check my course due dates for any problems"*
 
-**Not pulled:** gradebook, submissions, student data.
-
-### File-aware commands (opt-in)
-
-Every `--pull` automatically scans content for `/courses/X/files/N` references and writes a reverse map at `index["linked_files"]`. The map is free — it's just a regex scan, no extra API calls. Three opt-in commands then work with that map:
-
+Approve the run of:
 ```bash
-# After --pull has populated linked_files, download the referenced files
-uv run python lib/tools/canvas_sync.py --pull-files
-
-# Read-only fuzzy search — find files in Canvas by name, no download
-uv run python lib/tools/canvas_sync.py --find-file "rubric"
-
-# Search + interactive picker — pick from matches, download selected
-uv run python lib/tools/canvas_sync.py --pull-file "syllabus"
-
-# Skip individual files larger than threshold (e.g. 100mb, 1gb)
-uv run python lib/tools/canvas_sync.py --pull-files --max-file-size 100mb
-
-# Abort if total download size exceeds threshold
-uv run python lib/tools/canvas_sync.py --pull-files --max-total-size 500mb
+uv run python canvas_toolbox/lib/tools/course_quality_check.py --validate-dates
 ```
 
-Files land at `course/_files/<canvas-folder-path>/<filename>`. Each linked_files entry gets enriched with `filename`, `display_name`, `size`, `folder`, `url`, `content_type`, `local_path`.
+Checks for:
+- Due dates outside the course start/end window
+- Lock dates that come before the due date (students lose access before the deadline)
+- Two items in the same group sharing the same due date
+- Items named "Week 3" or "Sprint 2" whose due date falls in a different week or sprint
 
-**Pre-download confirmation:**
+Exits with an error code when problems are found — safe to run as a pre-push check.
 
-| Total scanned size | Behavior |
+## "Do my outcomes connect to what I'm grading?"
+
+**Ask your agent:** *"Audit my course for outcome alignment gaps"*
+
+Approve the run of:
+```bash
+uv run python canvas_toolbox/lib/tools/course_quality_check.py --alignment
+```
+
+Walks the chain: Course Outcome → Module Outcome → Rubric Criterion. Flags:
+- Course-level outcomes that no assessment evidences
+- Rubric criteria that no upstream outcome justifies
+- Module outcomes with no rubric coverage
+
+> Note: this uses text-matching, so treat results as a starting point for review rather than a definitive bug list.
+
+## "Are there files I'm not using?"
+
+**Ask your agent:** *"Find any unused or orphaned files in my Canvas course"*
+
+Approve the run of:
+```bash
+uv run python canvas_toolbox/lib/tools/course_quality_check.py --files
+```
+
+Cross-references everything linked from your course content against what's actually in Canvas Files. Flags:
+- Orphaned files — in Canvas but nothing links to them
+- Broken references — linked from content but the file was deleted
+- Likely duplicates — same filename, different IDs
+
+Read-only — nothing is deleted automatically.
+
+---
+
+# Syncing your course
+
+## The basic loop
+
+**Ask your agent:** *"Pull my course, show me what's changed, then push my updates to Canvas"*
+
+Approve the run of each step:
+```bash
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --pull     # pull course into course/
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --status   # see what's changed locally
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --push     # push changes to Canvas
+```
+
+Always run `--status` before `--push` so you know exactly what will change.
+
+## What gets pulled
+
+| Content type | Format | Editable locally |
+|---|---|---|
+| Pages | `.html` | Yes |
+| Assignments | `.json` | Yes — description, points, due date |
+| Discussions | `.json` | Yes — title, body |
+| Quizzes | `.json` | Yes — description, metadata |
+| ExternalTool / SubHeader / ExternalUrl | `.json` | No — manage in Canvas UI |
+
+Not pulled: gradebook, submissions, student data.
+
+## Downloading files referenced in your course
+
+**Ask your agent:** *"Download all the files referenced in my course"* or *"Find the rubric file in my Canvas files"*
+
+Approve the run of:
+```bash
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --pull-files          # download all referenced files
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --find-file "rubric"  # search by name, no download
+uv run python canvas_toolbox/lib/tools/canvas_sync.py --pull-file "rubric"  # search + pick + download
+```
+
+Files land at `course/_files/`. The toolkit warns you before downloading large batches:
+
+| Total size | What happens |
 |---|---|
-| < 50 MB | Silent — auto-proceed |
-| 50 MB – 1 GB | Prompt with summary + top 5 largest |
-| > 1 GB | Prompt with full list before proceeding |
-
-Bypass the prompt for CI: `CANVAS_SYNC_NO_PROMPT=1`.
+| Under 50 MB | Downloads automatically |
+| 50 MB – 1 GB | Shows a summary and asks you to confirm |
+| Over 1 GB | Shows the full file list before proceeding |
 
 ---
 
-## blueprint_sync.py — master → blueprint
+# Multi-course setup (optional)
 
-```bash
-uv run python lib/tools/blueprint_sync.py --pull     # mirror blueprint into blueprint_course/ + build mapping
-uv run python lib/tools/blueprint_sync.py --status   # show mapping + date coverage
-uv run python lib/tools/blueprint_sync.py --push     # sync master content + dates → blueprint
+For programs using Canvas Blueprints to distribute content to sections:
+
+```
+Source course   ← where you author content
+      ↓ course_mirror.py
+Master course   ← clean template
+      ↓ blueprint_sync.py
+Blueprint       ← Canvas clones new sections from this
 ```
 
-Syncs: settings, homepage, syllabus, all mapped pages/assignments/quizzes/discussions (with dates), module published state, item completion requirements, sprint prerequisite chain.
+```bash
+uv run python canvas_toolbox/lib/tools/blueprint_sync.py --pull    # mirror blueprint locally
+uv run python canvas_toolbox/lib/tools/blueprint_sync.py --status  # see what's changed
+uv run python canvas_toolbox/lib/tools/blueprint_sync.py --push    # sync master → blueprint
+```
 
-**Does not sync:** NewQuiz/ExternalTool content (Canvas REST API limitation — manage these in Canvas UI).
+If you only have one course, ignore this entirely — `canvas_sync.py` is all you need.
 
 ---
 
-## course_quality_check.py — course auditor
+# Using with AI coding tools
 
-Four opt-in audit modes — each runs alone (mode-switching, not combined). Output: `quality_report.md` at repo root + `.canvas/<audit-type>_*.json` for machine-readable.
+This repo ships an `AGENTS.md` that any modern AI coding tool loads automatically as project context. Open the repo in your tool of choice and ask *"what can you do for me?"* — the course audit agent's capabilities are built in.
 
-### Default — structural audit
-
-Issues that cause student problems:
-
-```bash
-uv run python lib/tools/course_quality_check.py              # check source course
-uv run python lib/tools/course_quality_check.py --master     # check master
-uv run python lib/tools/course_quality_check.py --blueprint  # check blueprint
-uv run python lib/tools/course_quality_check.py --all        # all three
-uv run python lib/tools/course_quality_check.py --all --fix  # auto-fix duplicates
-```
-
-**Checks:**
-- Duplicate assignment groups, assignments, quizzes, module items
-- Published items not linked in any module (students cannot find these)
-- Empty modules (sync artifact when all items are NewQuiz/ExternalTool)
-- Due/lock/unlock dates outside the course date window
-
-### `--files` — files audit
-
-Surfaces what Canvas's Files UI hides. Cross-references `index["linked_files"]` (built by `canvas_sync.py --pull`) against `GET /courses/:id/files`.
-
-```bash
-uv run python lib/tools/course_quality_check.py --files            # source course
-uv run python lib/tools/course_quality_check.py --files --master   # master
-uv run python lib/tools/course_quality_check.py --files --all      # all three
-```
-
-**Three findings:**
-
-| Finding | What it is |
+| Tool | How it loads |
 |---|---|
-| **Orphans** | Files in Canvas but not referenced from any synced content |
-| **Broken references** | File IDs referenced from content but file deleted from Canvas |
-| **Likely duplicates** | Files with same display_name, different IDs |
+| Claude Code, Cursor, Antigravity, Codex, Aider, Windsurf, Zed, Amp | Automatic — just open the repo |
+| VS Code + Copilot | Set `chat.useAgentsMdFile: true` once in user settings |
 
-Output also includes top-N orphans by size for cleanup prioritization. **Read-only — no Canvas writes.** A future `--delete-orphans` flag is intentionally NOT in scope until the audit has run against real courses for a semester to calibrate false-positive rate.
-
-**Caveat:** orphan classification is only as reliable as canvas_sync's content scan. Files referenced from surfaces canvas_sync doesn't deeply scan (New Quiz item bodies, rubric long_descriptions, gradebook custom columns) will be falsely flagged as orphans. Verify before acting.
-
-### `--alignment` — alignment-chain audit
-
-Walks Course Design Language Principle 6: **Course Outcome → Module Outcome → Rubric Criterion → Activity.** Flags breaks in the chain.
-
-```bash
-uv run python lib/tools/course_quality_check.py --alignment            # source course
-uv run python lib/tools/course_quality_check.py --alignment --master   # master
-uv run python lib/tools/course_quality_check.py --alignment --all      # all three
-```
-
-**Three break categories:**
-
-| Break | Meaning |
-|---|---|
-| **Course outcomes with no rubric** | Course-level outcome that no assessment evidences |
-| **Rubric criteria with no outcome** | Criterion the rubric grades on but no upstream outcome justifies |
-| **Module outcomes with no rubric** | Module-level outcome with no rubric coverage |
-
-Heuristic text-based matching (token-set overlap, threshold ≥ 2 shared significant tokens). False positives expected — treat output as a starting point for instructor review, not a list of bugs to fix.
-
-Outcomes are extracted from `course/syllabus.html` and per-module overview pages by looking for headers containing "outcome" / "objective" / "goal" followed by a list. Rubric criteria come from `GET /assignments/:id?include[]=rubric` (works with student tokens, unlike the `/rubrics` endpoint).
-
-### `--validate-dates` — date validation
-
-Catches date problems that cause student confusion or fail silently. **Read-only — no Canvas writes.**
-
-```bash
-uv run python lib/tools/course_quality_check.py --validate-dates            # source course
-uv run python lib/tools/course_quality_check.py --validate-dates --master   # master
-uv run python lib/tools/course_quality_check.py --validate-dates --all      # all three
-```
-
-**Four checks:**
-
-| Check | What it catches |
-|---|---|
-| **Out-of-window** | Any `due_at`, `lock_at`, or `unlock_at` (or discussion `todo_date`) outside the course date window |
-| **Ordering sanity** | `lock_at` before `due_at` (students lose access before the deadline); `unlock_at` after `due_at` (item unlocks after it's already due) |
-| **Duplicate due dates in group** | Two or more items in the same assignment group sharing the same due date |
-| **Label-vs-week/sprint drift** | Items named "Week N" or "SN" whose due date falls in a different week or sprint of the course |
-
-Exits non-zero when findings exist — safe to run in CI. All timestamps compared in UTC; findings within 24 hours of a window boundary may be timezone artifacts. Sprint drift assumes 2-week sprints.
+The agent can audit your course against ten instructional-design frameworks (Cognitive Load, Hattie 3-Phase, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language, Toyota Gap Analysis, CLO Quality, and Inverted Bloom's) and propose specific changes with before/after previews.
 
 ---
 
-## canvas_quiz_questions.py — quiz questions
+# BYUI course structure conventions
+
+The toolkit enforces this module order:
+
+1. **Overview page** — outcomes, estimated time, how the pieces connect
+2. **Content** — readings, videos, demos
+3. **Teach One Another** — discussion where students explain or apply to peers
+4. **Prove It** — assignment, quiz, or milestone demonstrating mastery
+
+Module naming: `Sprint X: Topic (WXX–WXX)` or `Week X: Topic`.
+
+---
+
+# Troubleshooting
+
+**`--pull` returns empty modules** — check that `CANVAS_COURSE_ID` is correct and your token has instructor access.
+
+**Push returns 403** — your token is read-only or student-level. Generate a new one from an instructor or admin account in Canvas → Account → Settings.
+
+**`--status` shows everything changed right after `--pull`** — re-run `--pull` (it's safe to run again). The toolkit needs one extra pull to finish recording which files it just downloaded.
+
+**Page looks wrong in Canvas after push** — Canvas adds its own CSS wrapper. The `.html` files store body content only. Check the result in Student View, not the editor.
+
+**Quality check shows "published not in module"** — the item exists in the course but was never added to a module. Students can't navigate to it. Add it via Canvas UI or contact your instructional designer.
+
+---
+
+# Technical reference
+
+## canvas_quiz_questions.py — classic quiz questions
 
 Manages questions for classic Canvas quizzes (not NewQuiz) from a local JSON file:
 
 ```bash
-uv run python lib/tools/canvas_quiz_questions.py --push course/.../quiz.questions.json  # idempotent
-uv run python lib/tools/canvas_quiz_questions.py --list course/.../quiz.questions.json  # read-only
-uv run python lib/tools/canvas_quiz_questions.py --clear course/.../quiz.questions.json # delete all
+uv run python canvas_toolbox/lib/tools/canvas_quiz_questions.py --push course/.../quiz.questions.json
+uv run python canvas_toolbox/lib/tools/canvas_quiz_questions.py --list course/.../quiz.questions.json
+uv run python canvas_toolbox/lib/tools/canvas_quiz_questions.py --clear course/.../quiz.questions.json
 ```
 
-**Question file format** (`*.questions.json`):
+Question file format:
 ```json
 {
   "canvas_quiz_id": 5911959,
@@ -356,101 +363,24 @@ uv run python lib/tools/canvas_quiz_questions.py --clear course/.../quiz.questio
 
 Supported types: `multiple_choice_question`, `true_false_question`, `short_answer_question`, `multiple_answers_question`, `essay_question`.
 
-Note: `canvas_quiz_id` and `course_id` are course-specific — the same quiz has different IDs in each course. Push to each course separately.
+Note: `canvas_quiz_id` and `course_id` are course-specific — the same quiz has a different ID in every course and section. Push to each course separately.
 
----
+## Keeping canvas_toolbox in sync across courses
 
-## canvas_api_tool.py — structural auditor
+The standard pattern: each Canvas course gets its own git repo, and `canvas_toolbox/` lives inside it as a plain clone. Toolkit updates flow downstream; your course content is never touched.
 
 ```bash
-uv run python lib/tools/canvas_api_tool.py --test    # smoke tests, no credentials needed
+# Update the toolkit in any course repo
+cd canvas_toolbox && git pull origin main && cd ..
 ```
 
-Scores your course against a stack of instructional-design frameworks:
+Only files under `canvas_toolbox/lib/`, `canvas_toolbox/scaffold/`, and `canvas_toolbox/examples/` change on a pull. Your `course/`, `.env`, and everything at your repo root are untouched.
 
-| Framework | What it checks |
-|---|---|
-| **Cognitive Load Theory** | Working-memory load — manage intrinsic, minimize extraneous, maximize germane |
-| **Hattie's 3-Phase Model** | Surface → Deep → Transfer progression; gaps at Surface block everything downstream |
-| **Three Domains of Learning** | Cognitive, Affective, Psychomotor coverage (Wilson) |
-| **BYUI Taxonomy Explorer** | Verb-level outcome classification (BYUI institutional view, Simpson psychomotor) |
-| **Experiential Learning** | Brain-aligned sequencing — Experience → Observation → Discussion → Explanation → Theory |
-| **Designer Thinking** | Backward design — Outcome → Evidence → Experience → Content → Reality Check |
-| **Toyota Gap Analysis** | Change-plan format — Current State → Target State → Gap → Root Cause → Countermeasure → Verification |
-
-Full descriptions and when-to-use guidance: [`lib/agents/knowledge/README.md`](lib/agents/knowledge/README.md).
-
----
-
-## Canvas API Gotchas
+## Canvas API gotchas
 
 - **Module prerequisites** — use form-encoded `data={"module[prerequisite_module_ids][]": id}`, not JSON. JSON returns 200 but silently does nothing.
 - **Completion requirements** — must be set on every item in a module for the prerequisite lock to enforce. `must_submit` for assignments/quizzes, `must_view` for pages/tools/URLs.
 - **Classic quiz points** — Canvas may show 0 after questions are pushed. Fix with `PUT /quizzes/:id {"quiz": {"points_possible": N}}`.
-- **late_policy PATCH** — returns 403 for instructor tokens. Set manually in Canvas Settings → Gradebook, or use admin token.
-- **IDs are course-specific** — the same assignment has a different ID in every course and every cloned section. Always match content across courses by title, never by ID.
-- **Content + module = two steps** — creating an assignment/quiz/page makes it exist in the course but students cannot access it until it is also added as a module item.
-
----
-
-## Using with AI Coding Tools
-
-This repo ships an `AGENTS.md` at the root that any modern AI coding tool will load as project context. Adoption status:
-
-| Tool | What you do | What happens |
-|---|---|---|
-| **Claude Code** (CLI) | Just open the repo | AGENTS.md is auto-loaded as a fallback when no CLAUDE.md is present. If you keep a personal CLAUDE.md for local notes, start it with `@AGENTS.md` to import this file. |
-| **Antigravity** (Gemini IDE) | Just open the repo | Native AGENTS.md auto-load since v1.20.3 |
-| **VS Code + Copilot** | Set `chat.useAgentsMdFile: true` once in user settings | Copilot loads AGENTS.md for every new chat in this workspace |
-| **VS Code + Claude / ChatGPT extension** | Same setting flip | Same behavior — AGENTS.md is the cross-tool standard |
-| **Cursor** | Just open the repo | Native AGENTS.md auto-load |
-| **OpenAI Codex** (CLI) | Just open the repo | Codex was the original AGENTS.md adopter — native |
-| **Aider, goose, Windsurf, Zed, Jules, JetBrains Junie, Amp** | Just open the repo | All native |
-
-After AGENTS.md loads, ask the agent *"what can you do for me?"* — the canvas_course_expert TLDR is built in.
-
----
-
-## BYUI Course Design Conventions
-
-Each student-facing module follows this order:
-
-1. **Overview page** — learning outcomes, estimated time, how items connect
-2. **Content** — readings, videos, demos
-3. **Teach One Another** — discussion where students explain or apply to peers
-4. **Prove It** — assignment, quiz, or milestone demonstrating mastery
-
-Module naming: `Sprint X: Topic (WXX–WXX)` or `Week X: Topic`.
-
----
-
-## Troubleshooting
-
-**`--pull` returns empty modules** — verify `CANVAS_COURSE_ID` is correct and the token has instructor access. Test: `GET /api/v1/courses/:id` — response should show `"type": "teacher"` in enrollments.
-
-**Push returns 403** — token is read-only or student-level. Generate a new token from an instructor or admin account.
-
-**`--status` shows everything changed after `--pull`** — index hashes may not have been written. Re-run `--pull` (safe to re-run).
-
-**Page looks wrong in Canvas after push** — Canvas adds its own CSS wrapper. The `.html` files store body only. Check in Student View, not the editor.
-
-**Quality check shows "published not in module"** — the item exists in the course but was never linked to a module. Add it via Canvas UI or `POST /modules/:id/items`.
-
----
-
-## Files
-
-| File | Purpose |
-|------|---------|
-| `lib/tools/canvas_sync.py` | Source course mirror |
-| `lib/tools/blueprint_sync.py` | Master → Blueprint sync |
-| `lib/tools/course_mirror.py` | Source → Master mirror |
-| `lib/tools/course_quality_check.py` | Course health auditor |
-| `lib/tools/canvas_quiz_questions.py` | Classic quiz question manager |
-| `lib/tools/canvas_api_tool.py` | Cognitive load auditor + Canvas write functions |
-| `lib/agents/canvas_blueprint_sync.md/.json` | Blueprint sync agent guide + API schema |
-| `lib/agents/canvas_course_expert.md/.json` | Audit agent guide + rules |
-| `lib/agents/canvas_content_sync.md/.json` | Content sync agent guide |
-| `lib/agents/knowledge/` | Instructional-design knowledge references (CLT, Hattie, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis) — see [`lib/agents/knowledge/README.md`](lib/agents/knowledge/README.md) |
-| `course/` | Live course mirror — source of truth |
-| `AGENTS.md` | Cross-tool project context — auto-loaded by Antigravity, Cursor, VS Code Copilot, Codex, Claude Code (fallback), Aider |
+- **late_policy PATCH** — returns 403 for instructor tokens. Set manually in Canvas Settings → Gradebook.
+- **IDs are course-specific** — the same assignment has a different ID in every course and section. Always match content across courses by title, never by ID.
+- **Content + module = two steps** — creating an assignment or page makes it exist in the course but students can't access it until it's also added as a module item.

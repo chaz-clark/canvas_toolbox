@@ -225,7 +225,18 @@ Each student-facing module should follow a consistent internal structure. A comm
 
 Module naming should follow a consistent convention, e.g., `Module X: Topic` or `Week X: Topic`.
 
-The `canvas_course_expert` agent audits against cognitive load theory (extraneous/intrinsic/germane) and Hattie's 3-phase model (Surface/Deep/Transfer). Run it after course setup to get a structured gap analysis. If your institution has specific teaching standards or design frameworks, add them to `CLAUDE.md` so the agent can audit against them.
+The `canvas_course_expert` agent audits against four frameworks particularly relevant at course setup time:
+
+| Framework | Knowledge file | What it checks |
+|---|---|---|
+| CLO Quality | [`knowledge/outcomes_quality_knowledge.md`](../agents/knowledge/outcomes_quality_knowledge.md) | Whether learning outcomes are well-formed before building content |
+| Designer Thinking | [`knowledge/designer_thinking_knowledge.md`](../agents/knowledge/designer_thinking_knowledge.md) | Whether the course was designed backward from outcomes or forward from content |
+| Cognitive Load Theory | [`knowledge/cognitive_load_theory_knowledge.md`](../agents/knowledge/cognitive_load_theory_knowledge.md) | Extraneous load from navigation, structure, or module design |
+| Hattie 3-Phase | [`knowledge/hattie_3phase_knowledge.md`](../agents/knowledge/hattie_3phase_knowledge.md) | Surface → Deep → Transfer coverage across the course |
+
+**Check CLO Quality and Designer Thinking first.** Auditing structure against broken or forward-designed outcomes produces misleading findings — fix the outcomes, then audit the course.
+
+Run `canvas_course_expert` after Phase 6 to get a structured gap analysis. If your institution has specific teaching standards, add them to `CLAUDE.md` so the agent can audit against them.
 
 ---
 
