@@ -102,9 +102,29 @@ The seven files cover overlapping but distinct ground. Quick routing:
 
 ---
 
+### [`outcomes_quality_knowledge.md`](outcomes_quality_knowledge.md)
+
+**Sources:** Morrison, Ross, Morrison & Kalman (2019). *Designing Effective Instruction*, 8th ed. Ch. 5; BYU-Idaho Learning and Teaching. *Learning Outcomes*; BYU-Idaho Assurance of Learning CLO Rubric.
+**Core idea:** Alignment checks that outcomes are *wired together*; this framework checks that the outcomes themselves are *worth wiring*. Provides the full BYUI outcome hierarchy (ILO → PLO → CLO → LLO), BYUI's 5 kinds of outcomes (Knowledge, Character & Values, Skills, Experiences, Learning-to-Learn), the AoL 6-criteria CLO quality rubric, Bloom's observable verb lists, the behavioral vs. cognitive objective formats, and the process-vs-outcome anti-pattern.
+**When to use:** When auditing whether a course's CLOs are well-formed before checking alignment. Precedes `designer_thinking_knowledge.md` in the audit order — you can't meaningfully check backward design if the outcomes themselves are broken.
+**Audit tag:** `clo_quality` ∈ {`meets_criteria`, `partial`, `needs_revision`} + `clo_criteria_flags` listing which of the 6 AoL criteria fail.
+**Pairs with:** `designer_thinking_knowledge.md` (backward design from outcomes), `taxonomy_explorer_knowledge.md` (BYUI verb tool), `three_domains_knowledge.md` (domain coverage and rigor spread).
+
+---
+
+### [`inverted_blooms_knowledge.md`](inverted_blooms_knowledge.md)
+
+**Source:** Kassorla, M. *Inverted Bloom's for the Age of AI.* Substack.
+**Core idea:** Traditional Bloom's assumes students build foundational knowledge before creating. AI inverts this — students can now *Create* first using AI tools, then need to be scaffolded *down* to genuine understanding and retention. Assessment design must deliberately reintroduce productive friction: staged drafts, oral defenses, process documentation, or revision cycles that require evidence of the student's own thinking. A polished submission is no longer evidence of learning.
+**When to use:** When auditing whether assessments are designed to produce student-owned learning or inadvertently accept AI-generated work. Applies to every assignment and rubric in the course. Most urgent for text-based, artifact-submission assignments.
+**Audit tag:** `ai_agency` ∈ {`ai_dependent`, `scaffolded`, `student_owned`}
+**Pairs with:** `outcomes_quality_knowledge.md` (CLOs need ownership-clause framing), `designer_thinking_knowledge.md` (productive friction as part of backward design), `cognitive_load_theory_knowledge.md` (germane load is what AI bypasses).
+
+---
+
 ## Tag stack — full audit output
 
-A well-formed audit issue carries up to seven tag dimensions so the reader can route it cleanly:
+A well-formed audit issue carries up to nine tag dimensions so the reader can route it cleanly:
 
 | Tag | From file |
 |---|---|
@@ -116,8 +136,11 @@ A well-formed audit issue carries up to seven tag dimensions so the reader can r
 | `design_mode` | `designer_thinking_knowledge.md` |
 | `design_coherence` | `course_design_language_knowledge.md` |
 | `design_principle` | `course_design_language_knowledge.md` |
+| `clo_quality` | `outcomes_quality_knowledge.md` |
+| `clo_criteria_flags` | `outcomes_quality_knowledge.md` (list of failing AoL criteria) |
+| `ai_agency` | `inverted_blooms_knowledge.md` |
 
-The last two are paired (two-axis): `design_coherence` ∈ `{architected, partial, assembled}` describes *how well* a principle is satisfied; `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}` says *which principle* the finding is about.
+The Course Design Language tags are paired (two-axis): `design_coherence` ∈ `{architected, partial, assembled}` describes *how well* a principle is satisfied; `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}` says *which principle* the finding is about.
 
 The Toyota A3 structure wraps the issue itself.
 

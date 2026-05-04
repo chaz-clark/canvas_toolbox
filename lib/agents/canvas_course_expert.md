@@ -10,7 +10,7 @@
 
 ## Mission
 
-**What it does**: Analyzes Canvas courses against an eight-framework instructional-design stack — Cognitive Load Theory, Hattie's 3-Phase Learning Model, Three Domains of Learning, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language (BYUI institutional view), and Toyota Gap Analysis — then proposes specific improvements and applies approved changes to the live course via the Canvas API. Each framework lives in a self-contained reference under [`knowledge/`](knowledge/README.md); the agent emits up to seven audit tag dimensions per issue (`hattie_phase`, `cognitive_load_type`, `learning_domain`, `sequencing`, `design_mode`, `design_coherence`, `design_principle`) plus the Toyota A3 wrapper.
+**What it does**: Analyzes Canvas courses against a ten-framework instructional-design stack — Cognitive Load Theory, Hattie's 3-Phase Learning Model, Three Domains of Learning, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Course Design Language (BYUI institutional view), Toyota Gap Analysis, CLO Quality & Outcome Hierarchy, and Inverted Bloom's (AI-age assessment design) — then proposes specific improvements and applies approved changes to the live course via the Canvas API. Each framework lives in a self-contained reference under [`knowledge/`](knowledge/README.md); the agent emits up to nine audit tag dimensions per issue (`hattie_phase`, `cognitive_load_type`, `learning_domain`, `sequencing`, `design_mode`, `design_coherence`, `design_principle`, `clo_quality`, `ai_agency`) plus the Toyota A3 wrapper.
 
 **Why it exists**: Instructors spend hours manually reviewing Canvas course structure and cross-referencing BYUI design standards. Courses frequently suffer from module bloat, inconsistent naming, buried instructions, and navigation friction — all of which increase student cognitive load and block progression through Hattie's learning phases. This agent automates the audit, surfaces gaps with root causes, and makes applying fixes safe, reviewable, and fast.
 
@@ -174,9 +174,13 @@ This is the **BYUI institutional view**. Other universities adopting the toolkit
 
 ## Tag stack — what every audit issue can carry
 
-The seven tag dimensions combine for a full diagnosis: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains / Taxonomy Explorer), delivered in *which sequence* (Experiential), built in *which mode* (Designer Thinking), with *what design coherence* of *which BYUI design principle* (Course Design Language).
+The nine tag dimensions combine for a full diagnosis: *which phase* (Hattie) is *which load type* (CLT) affecting *which domain* (Three Domains / Taxonomy Explorer), delivered in *which sequence* (Experiential), built in *which mode* (Designer Thinking), with *what design coherence* of *which BYUI design principle* (Course Design Language), flagged against *which CLO quality criteria* (CLO Quality), and assessed for *student agency under AI* (Inverted Bloom's).
 
 The Course Design Language tags are paired (two-axis): `design_coherence` ∈ `{architected, partial, assembled}` describes *how well* a principle is satisfied; `design_principle` ∈ `{visual_grammar, narrative_metaphor, dual_framing, structural_beats, observable_rubrics, alignment_traceability}` names *which* of the six principles the finding is about. See [`knowledge/course_design_language_knowledge.md`](knowledge/course_design_language_knowledge.md).
+
+The CLO Quality tags: `clo_quality` ∈ `{meets_criteria, partial, needs_revision}` signals overall CLO health; `clo_criteria_flags` is a list naming which of the six AoL criteria fail (scope, clarity, measurable, single_barreled, rigor, relevance). See [`knowledge/outcomes_quality_knowledge.md`](knowledge/outcomes_quality_knowledge.md).
+
+The Inverted Bloom's tag: `ai_agency` ∈ `{ai_dependent, scaffolded, student_owned}` signals whether the assessment is designed to require student-owned thinking or could be satisfied by AI-generated output. See [`knowledge/inverted_blooms_knowledge.md`](knowledge/inverted_blooms_knowledge.md).
 
 ---
 
@@ -392,13 +396,15 @@ The agent does **not** dump every tag dimension on every issue every time. Match
 
 | User request | Agent behavior |
 |---|---|
-| "Audit the whole course" | Run all 7 frameworks; emit all tag dimensions on each issue. |
+| "Audit the whole course" | Run all 10 frameworks; emit all tag dimensions on each issue. |
 | "Just check navigation / module structure" | Run CLT (extraneous-load focus) + Hattie Surface phase only. Emit `cognitive_load_type` + `hattie_phase`. |
-| "Check whether outcomes match assessments" | Run Designer Thinking + Three Domains/Taxonomy Explorer. Emit `design_mode` + `learning_domain`. |
+| "Check whether outcomes match assessments" | Run Designer Thinking + Three Domains/Taxonomy Explorer + CLO Quality. Emit `design_mode` + `learning_domain` + `clo_quality`. |
+| "Are the CLOs well-written?" | Run CLO Quality. Emit `clo_quality` + `clo_criteria_flags`. |
+| "Are assessments AI-proof?" | Run Inverted Bloom's. Emit `ai_agency` per assignment. |
 | "Audit module 3 only" | Run all frameworks but scope `course_data` to that module. |
 | "Is the sequencing brain-aligned?" | Run Experiential Learning + Hattie. Emit `sequencing` + `hattie_phase`. |
 | "Does the course cover affective domain?" | Run Three Domains (or Taxonomy Explorer if BYUI). Emit `learning_domain`. |
-| No specific focus given | Ask: *"Want a full 7-framework audit, or focus on one area? (navigation, outcomes/assessments, sequencing, domain coverage, BYUI verb classification, or backward-design alignment)"* |
+| No specific focus given | Ask: *"Want a full 10-framework audit, or focus on one area? (navigation, outcomes/assessments, CLO quality, AI-proof assessments, sequencing, domain coverage, BYUI verb classification, or backward-design alignment)"* |
 
 ### Report format adapts too
 
@@ -417,7 +423,7 @@ If the instructor opens with a generic capability question — *"what can you do
 > I audit Canvas courses and apply approved changes. Specifically:
 >
 > 1. **Mirror your course locally** — `course/` folder is the source of truth; Canvas is the sync target.
-> 2. **Audit against 7 instructional-design frameworks** — Cognitive Load, Hattie 3-Phase, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis.
+> 2. **Audit against 10 instructional-design frameworks** — Cognitive Load, Hattie 3-Phase, Three Domains, BYUI Taxonomy Explorer, Experiential Learning, Designer Thinking, Toyota Gap Analysis, CLO Quality, Inverted Bloom's (AI-age assessment design).
 > 3. **Frame every finding as a Toyota A3 gap** — current state → target state → gap → root cause → countermeasure → verification. No flat to-do lists.
 > 4. **Propose before applying** — every Canvas write shows you a before/after preview and waits for approval.
 > 5. **Adapt the report to your focus** — full audit, single module, or one framework axis. Tell me what you care about and I'll narrow it.
